@@ -282,6 +282,39 @@ function totalLevel(char) {
 
 // ─── CHARACTER PANEL RENDERER ─────────────────────────────────────────────────
 
+function getCharAvatar(char) {
+    try {
+        if (char.isPlayer) {
+            // User persona avatar
+            const personas = extension_settings?.personas;
+            const activeId = extension_settings?.active_persona;
+            if (activeId && personas?.[activeId]?.avatar) {
+                return `/User Avatars/${personas[activeId].avatar}`;
+            }
+            // Fallback: check ST user avatar setting
+            const userAvatar = extension_settings?.user_avatar;
+            if (userAvatar) return `/User Avatars/${userAvatar}`;
+            return null;
+        } else {
+            // NPC/char avatar from ST characters list
+            const ctx  = getContext();
+            const name = char.name?.toLowerCase().trim();
+            const match = ctx.characters?.find(c => c.name?.toLowerCase().trim() === name);
+            if (match?.avatar) return `/characters/${match.avatar}`;
+            return null;
+        }
+    } catch { return null; }
+}
+
+function getCurrentCharAvatar() {
+    try {
+        const ctx  = getContext();
+        const char = ctx.characters?.[ctx.characterId];
+        if (char?.avatar) return `/characters/${char.avatar}`;
+        return null;
+    } catch { return null; }
+}
+
 function renderCharPanel(char) {
     const capped  = 20;
     const cid     = char.isPlayer ? '__player__' : char.name;
@@ -294,7 +327,24 @@ function renderCharPanel(char) {
         `<option value="${r}" ${char.adventurerRank === r ? 'selected' : ''}>${r}</option>`).join('');
 
     // ── Identity ──────────────────────────────────────────────────────
+    let avatarBlock = '';
+    if (char.isPlayer) {
+        const userAvatar = getCharAvatar(char);
+        const charAvatar = getCurrentCharAvatar();
+        avatarBlock = `<div class="el-avatar-row">
+            <div class="el-avatar-wrap" title="{{user}}">
+                ${userAvatar ? `<img class="el-avatar" src="${userAvatar}" alt="user"/>` : `<div class="el-avatar el-avatar-placeholder">U</div>`}
+                <span class="el-avatar-label">{{user}}</span>
+            </div>
+            <div class="el-avatar-wrap" title="{{char}}">
+                ${charAvatar ? `<img class="el-avatar" src="${charAvatar}" alt="char"/>` : `<div class="el-avatar el-avatar-placeholder">C</div>`}
+                <span class="el-avatar-label">{{char}}</span>
+            </div>
+        </div>`;
+    }
+
     let html = `<div class="el-identity">
+        ${avatarBlock}
         <div class="el-editable el-ident-name" data-cid="${cid}" data-f="name" contenteditable="true">${char.name || '—'}</div>
         <div class="el-ident-row">
             <span class="el-ident-label">Class:</span>
