@@ -323,9 +323,9 @@
     display: flex;
     align-items: center;
     gap: 0.6em;
-    background: color-mix(in srgb, var(--el-gold) 6%, var(--el-accent));
-    border: 1px solid color-mix(in srgb, var(--el-gold) 25%, transparent);
-    border-left: 3px solid var(--el-gold);
+    background: var(--el-accent);
+    border: 1px solid color-mix(in srgb, var(--el-gold) 20%, var(--el-border));
+    border-left: 3px solid color-mix(in srgb, var(--el-gold) 60%, transparent);
     border-radius: 0.375em;
     padding: 0.45em 0.6em;
     margin-bottom: 0.35em;
@@ -335,14 +335,14 @@
     width:  clamp(28px, 3.5vw, 34px);
     height: clamp(28px, 3.5vw, 34px);
     flex-shrink: 0;
-    background: color-mix(in srgb, var(--el-gold) 15%, var(--el-accent));
-    border: 1px solid color-mix(in srgb, var(--el-gold) 35%, transparent);
+    background: color-mix(in srgb, var(--el-gold) 10%, var(--el-accent));
+    border: 1px solid color-mix(in srgb, var(--el-gold) 25%, transparent);
     border-radius: 0.25em;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: clamp(0.85rem, 1.1vw, 1.1rem);
-    color: var(--el-gold);
+    color: color-mix(in srgb, var(--el-gold) 70%, var(--el-text));
 }
 
 .el-disc-info {
@@ -374,8 +374,13 @@
 
 .el-equip-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.375em; }
 
-.el-equip-slot { padding: 0.5em 0.625em; background: rgba(0,0,0,0.2); border: 1px solid var(--el-border); border-radius: 0.375em; transition: border-color 0.3s; }
-.el-equip-slot.filled { border-color: color-mix(in srgb, var(--el-border) 80%, white); }
+.el-equip-slot { padding: 0.5em 0.625em; background: rgba(0,0,0,0.2); border: 1px solid var(--el-border); border-left: 3px solid var(--el-border); border-radius: 0.375em; transition: border-color 0.3s; display: flex; flex-direction: column; gap: 0.3em; position: relative; }
+.el-equip-slot.filled { border-color: color-mix(in srgb, var(--tc, var(--el-border)) 50%, var(--el-border)); }
+.el-equip-slot-top { display: flex; align-items: center; gap: 0.3em; }
+.el-equip-slot-top .el-slot-label { flex: 1; }
+.el-equip-slot .el-slot-name { font-size: clamp(0.78rem, 0.92vw, 0.92rem); font-weight: 600; min-height: 1.2em; }
+.el-equip-slot .el-inv-tier-badge { font-size: clamp(0.6rem, 0.72vw, 0.72rem); padding: 0.05em 0.2em; min-width: 4.5em; }
+.el-equip-slot .el-rm-btn { flex-shrink: 0; }
 
 .el-slot-label { display: block; font-size: clamp(0.65rem, 0.75vw, 0.75rem); color: var(--el-text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.2em; }
 .el-slot-item  { font-size: clamp(0.75rem, 0.9vw, 0.9rem); color: var(--el-text); }
@@ -704,10 +709,8 @@
 
 /* ─── EQUIPMENT SLOT EDIT ───────────────────────────────────────── */
 
-.el-equip-slot { display: flex; flex-direction: column; gap: 0.25em; position: relative; }
-.el-equip-slot .el-slot-name { font-size: clamp(0.75rem,0.9vw,0.9rem); font-weight:600; }
-.el-equip-slot .el-tier-sel  { width: 100%; }
-.el-equip-slot .el-rm-btn    { position: absolute; top: 0.2em; right: 0.2em; }
+.el-inv-row { display: flex; align-items: center; gap: 0.5em; padding: 0.3em 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.el-inv-row .el-inv-name { flex: 1; min-width: 3em; font-weight: 600; font-size: clamp(0.8rem, 0.95vw, 0.9rem); }
 
 /* ─── INVENTORY EDIT ROW ────────────────────────────────────────── */
 
@@ -891,4 +894,22 @@
 @keyframes el-pulse {
     0%, 100% { opacity: 0.4; transform: scale(1); }
     50%       { opacity: 0.8; transform: scale(1.08); }
+}
+
+/* ─── INJECTION PREVIEW ─────────────────────────────────────────── */
+
+.el-inject-preview {
+    display: none;
+    margin-top: 0.5em;
+    padding: 0.6em 0.75em;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid var(--el-border);
+    border-radius: 0.375em;
+    font-family: monospace;
+    font-size: 0.72rem;
+    color: var(--el-text-dim);
+    white-space: pre-wrap;
+    line-height: 1.5;
+    max-height: 200px;
+    overflow-y: auto;
 }
