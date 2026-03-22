@@ -535,7 +535,7 @@
     cursor: pointer; font-size: 0.75rem; padding: 0 0.2em; flex-shrink: 0;
     opacity: 0; transition: opacity 0.15s, color 0.15s;
 }
-.el-skill-edit-row:hover .el-rm-btn,
+.el-sk-card:hover        .el-rm-btn,
 .el-inv-edit-row:hover   .el-rm-btn,
 .el-status-row:hover     .el-rm-btn,
 .el-equip-slot:hover     .el-rm-btn { opacity: 1; }
@@ -562,14 +562,108 @@
 }
 .el-mini-sel:focus, .el-rank-select:focus { border-color: var(--el-hi); }
 
-/* ─── SKILL EDIT ROW ────────────────────────────────────────────── */
+/* ─── SKILL CARDS ───────────────────────────────────────────────── */
 
-.el-skill-edit-row {
-    display: flex; flex-wrap: wrap; align-items: center;
-    gap: 0.3em; padding: 0.4em 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+.el-sk-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6em;
+    background: color-mix(in srgb, var(--skc, #888) 8%, var(--el-accent));
+    border: 1px solid color-mix(in srgb, var(--skc, #888) 40%, transparent);
+    border-left: 3px solid var(--skc, #888);
+    border-radius: 0.375em;
+    padding: 0.5em 0.6em 0.5em 0.5em;
+    margin-bottom: 0.4em;
+    transition: background 0.15s;
 }
-.el-skill-edit-row .el-skill-name { flex: 1; min-width: 4em; font-weight: 600; }
-.el-skill-edit-row .el-skill-desc { width: 100%; font-size: 0.8em; color: var(--el-text-dim); font-style: italic; padding-left: 0.3em; }
+
+.el-sk-rank {
+    width:  clamp(32px, 4vw, 40px);
+    height: clamp(32px, 4vw, 40px);
+    flex-shrink: 0;
+    background: color-mix(in srgb, var(--skc, #888) 20%, var(--el-accent));
+    border: 2px solid var(--skc, #888);
+    border-radius: 0.3em;
+    color: var(--skc, #888);
+    font-size: clamp(0.85rem, 1.1vw, 1.1rem);
+    font-weight: 900;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.1s;
+    user-select: none;
+    line-height: 1;
+}
+.el-sk-rank:hover  { background: color-mix(in srgb, var(--skc, #888) 35%, var(--el-accent)); }
+.el-sk-rank:active { transform: scale(0.92); }
+
+.el-sk-body { flex: 1; min-width: 0; }
+
+.el-sk-top {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+}
+
+.el-sk-lv {
+    font-size: clamp(0.72rem, 0.85vw, 0.85rem);
+    font-weight: 700;
+    color: var(--el-hi);
+    min-width: 2.2em;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.el-sk-name {
+    flex: 1;
+    font-size: clamp(0.82rem, 1vw, 0.95rem);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--el-text);
+    min-width: 2em;
+}
+
+.el-sk-edit-btn {
+    background: transparent;
+    border: none;
+    color: var(--el-text-dim);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0 0.2em;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+}
+.el-sk-card:hover .el-sk-edit-btn { opacity: 1; }
+.el-sk-edit-btn:hover { color: var(--el-hi); }
+
+.el-rm-btn.always-show { opacity: 0; }
+.el-sk-card:hover .el-rm-btn.always-show { opacity: 1; }
+
+.el-sk-desc-wrap {
+    margin-top: 0.3em;
+}
+.el-sk-desc {
+    font-size: clamp(0.72rem, 0.85vw, 0.85rem);
+    color: var(--el-text-dim);
+    font-style: italic;
+    line-height: 1.45;
+    display: block;
+    width: 100%;
+    min-height: 1.5em;
+}
+.el-sk-desc-preview {
+    font-size: clamp(0.7rem, 0.82vw, 0.82rem);
+    color: var(--el-text-dim);
+    font-style: italic;
+    margin-top: 0.25em;
+    opacity: 0.75;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 /* ─── EQUIPMENT SLOT EDIT ───────────────────────────────────────── */
 
