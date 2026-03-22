@@ -258,14 +258,20 @@ function elLog(msg) {
 
 // ─── SETTINGS INIT ────────────────────────────────────────────────────────────
 
+// Safe deep-clone — structuredClone may not exist in older mobile WebViews
+function deepClone(obj) {
+    try { return structuredClone(obj); }
+    catch { return JSON.parse(JSON.stringify(obj)); }
+}
+
 function initSettings() {
     if (!extension_settings[EXT_NAME]) {
-        extension_settings[EXT_NAME] = structuredClone(DEFAULT_SETTINGS);
+        extension_settings[EXT_NAME] = deepClone(DEFAULT_SETTINGS);
     }
     settings = extension_settings[EXT_NAME];
     // Patch missing config keys
     for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
-        if (k !== 'state' && settings[k] === undefined) settings[k] = structuredClone(v);
+        if (k !== 'state' && settings[k] === undefined) settings[k] = deepClone(v);
     }
     // State lives in chat_metadata, not extension_settings — init blank placeholder
     if (!settings.state) settings.state = { player: makeCharacter(getContext().name1 || 'Player', true), npcs: {} };
@@ -1543,37 +1549,66 @@ function bindTabs(hud) {
 
 function createOrb() {
     if (document.getElementById('el-orb')) return;
+    console.log('[Ellinia] createOrb — building orb');
+
     const orb = document.createElement('div');
     orb.id    = 'el-orb';
     orb.innerHTML = '<span style="pointer-events:none;font-size:20px;color:#fff;">EL</span>';
     orb.title = 'Ellinia Tracker';
 
-    // Set position from saved or default
-    const savedLeft   = localStorage.getItem('el_orb_left');
-    const savedBottom = localStorage.getItem('el_orb_bottom');
-    orb.style.left   = savedLeft   || '16px';
-    orb.style.bottom = savedBottom || '100px';
-    orb.style.right  = 'auto';
-    // Always show via JS — don't rely on CSS media query (may not fire in ST's mobile webview)
-    orb.style.display        = 'flex';
-    orb.style.zIndex         = '2147483647'; // max z-index
-    orb.style.background     = '#ff0000';    // bright red — debug
-    orb.style.border         = '3px solid #ffff00';
-    orb.style.borderRadius   = '50%';
-    orb.style.width          = '64px';
-    orb.style.height         = '64px';
-    orb.style.alignItems     = 'center';
-    orb.style.justifyContent = 'center';
-    orb.style.fontSize       = '28px';
-    orb.style.color          = '#ffffff';
-    orb.style.position       = 'fixed';
+    // All styling inline — bypasses any CSS specificity issues in ST's mobile webview
+    Object.assign(orb.style, {
+        display:        'flex',
+        position:       'fixed',
+        zIndex:         '2147483647',
+        background:     '#ff0000',       // debug — bright red
+        border:         '3px solid #ffff00',
+        borderRadius:   '50%',
+        width:          '64px',
+        height:         '64px',
+        alignItems:     'center',
+        justifyContent: 'center',
+        fontSize:       '28px',
+        color:          '#ffffff',
+        cursor:         'grab',
+        userSelect:     'none',
+        touchAction:    'none',
+        webkitTapHighlightColor: 'transparent',
+        left:           '16px',
+        bottom:         '100px',
+        right:          'auto',
+        top:            'auto',
+    });
 
     document.body.appendChild(orb);
+    console.log('[Ellinia] createOrb — orb appended to body');
+
+    // ── Restore saved position, then clamp to viewport ─────────────
+    const savedLeft   = localStorage.getItem('el_orb_left');
+    const savedBottom = localStorage.getItem('el_orb_bottom');
+    if (savedLeft)   orb.style.left   = savedLeft;
+    if (savedBottom) orb.style.bottom = savedBottom;
+
+    // Clamp to current viewport (desktop position may be offscreen on mobile)
+    requestAnimationFrame(() => {
+        const rect = orb.getBoundingClientRect();
+        const vw   = window.innerWidth;
+        const vh   = window.innerHeight;
+        if (rect.right < 10 || rect.left > vw - 10 || rect.top > vh - 10 || rect.bottom < 10) {
+            console.log('[Ellinia] createOrb — saved position offscreen, resetting');
+            orb.style.left   = '16px';
+            orb.style.bottom = '100px';
+            orb.style.right  = 'auto';
+            localStorage.removeItem('el_orb_left');
+            localStorage.removeItem('el_orb_bottom');
+        }
+    });
 
     // ── Drag logic ────────────────────────────────────────────────────
     let startX, startY, startLeft, startBottom, dragged = false;
 
     function onMove(e) {
+        e.preventDefault(); // prevent page scroll while dragging orb
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
         const dx = clientX - startX;
@@ -1854,19 +1889,38 @@ function hookEvents() {
     // These only need to refresh avatars — debounce to avoid thrashing during RP
     eventSource.on(event_types.USER_MESSAGE_RENDERED, debouncedRender);
     eventSource.on(event_types.SETTINGS_UPDATED, debouncedRender);
-
-    // Re-render when ST settings change (persona switch etc)
-    eventSource.on(event_types.SETTINGS_UPDATED, () => {
-        renderHUD();
-    });
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 
 jQuery(async () => {
-    initSettings();
-    loadChatState();
-    createHUD();
-    hookEvents();
+    console.log(`[Ellinia Tracker v${EXT_VERSION}] Init starting…`);
+
+    try {
+        initSettings();
+        loadChatState();
+    } catch (err) {
+        console.error('[Ellinia] Settings/state init failed:', err);
+    }
+
+    // Orb must survive independently — if HUD creation crashes, the orb still shows
+    try {
+        createOrb();
+    } catch (err) {
+        console.error('[Ellinia] createOrb failed:', err);
+    }
+
+    try {
+        createHUD();
+    } catch (err) {
+        console.error('[Ellinia] createHUD failed:', err);
+    }
+
+    try {
+        hookEvents();
+    } catch (err) {
+        console.error('[Ellinia] hookEvents failed:', err);
+    }
+
     console.log(`[Ellinia Tracker v${EXT_VERSION}] Initialized`);
 });
