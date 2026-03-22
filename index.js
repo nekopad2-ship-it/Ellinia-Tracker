@@ -757,6 +757,8 @@ function bindCollapsibles(root) {
         toggle.replaceWith(fresh);
         fresh.addEventListener('click', (e) => {
             if (e.target.classList.contains('el-remove-npc')) return;
+            // Ignore clicks originating from interactive/editable elements inside the toggle
+            if (e.target.closest('[contenteditable], input, select, button, .el-pm-btn, .el-rm-btn, .el-add-btn')) return;
             const body  = document.getElementById(tid);
             if (!body) return;
             const open  = !body.classList.contains('collapsed');
