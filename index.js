@@ -1052,7 +1052,7 @@ async function parseLastMessages() {
                     elLog(`⚠ No match for character: "${upd.character}"`);
                 }
             }
-
+        }
 
         if (changed > 0) {
             saveState();
