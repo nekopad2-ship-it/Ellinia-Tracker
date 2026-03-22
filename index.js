@@ -1549,66 +1549,41 @@ function bindTabs(hud) {
 
 function createOrb() {
     if (document.getElementById('el-orb')) return;
-    dbg('createOrb — building orb');
-
-    // ── Diagnose stacking context traps ──────────────────────────────
-    const bodyStyle = window.getComputedStyle(document.body);
-    const traps = ['transform', 'filter', 'backdropFilter', 'webkitBackdropFilter', 'willChange', 'perspective']
-        .filter(p => { const v = bodyStyle[p]; return v && v !== 'none' && v !== 'auto'; });
-    if (traps.length) dbg(`⚠ body has stacking-context traps: ${traps.join(', ')} — fixed positioning may break`);
-    else dbg('body stacking context: clean');
 
     const orb = document.createElement('div');
     orb.id    = 'el-orb';
-    orb.innerHTML = '<span style="pointer-events:none;font-size:20px;color:#fff;">EL</span>';
+    orb.innerHTML = '<span class="el-orb-glyph">◈</span>';
     orb.title = 'Ellinia Tracker';
 
-    // All styling inline — bypasses any CSS specificity issues in ST's mobile webview
+    // Minimal inline overrides — rest comes from style.css #el-orb
+    // display:flex required because CSS defaults to none (JS-controlled visibility)
+    // zIndex high enough to clear any ST overlays
     Object.assign(orb.style, {
-        display:        'flex',
-        position:       'fixed',
-        zIndex:         '2147483647',
-        background:     '#ff0000',       // debug — bright red
-        border:         '3px solid #ffff00',
-        borderRadius:   '50%',
-        width:          '64px',
-        height:         '64px',
-        alignItems:     'center',
-        justifyContent: 'center',
-        fontSize:       '28px',
-        color:          '#ffffff',
-        cursor:         'grab',
-        userSelect:     'none',
-        touchAction:    'none',
-        webkitTapHighlightColor: 'transparent',
-        right:          'auto',
-        top:            'auto',
+        display:   'flex',
+        position:  'fixed',
+        zIndex:    '10002',
+        right:     'auto',
+        top:       'auto',
     });
 
-    // ── Clear stale desktop position immediately ─────────────────────
-    localStorage.removeItem('el_orb_left');
-    localStorage.removeItem('el_orb_bottom');
-    // Always start at a known-safe position in center-bottom area
-    orb.style.left   = '16px';
-    orb.style.bottom = '160px';  // higher up — clear ST's bottom toolbar
+    // Restore saved position, or use safe default
+    const savedLeft   = localStorage.getItem('el_orb_left');
+    const savedBottom = localStorage.getItem('el_orb_bottom');
+    orb.style.left   = savedLeft   || '16px';
+    orb.style.bottom = savedBottom || '160px';
 
-    // ── Append to documentElement (not body) to escape stacking context traps ──
+    // Append to <html> — escapes stacking context traps on <body>
     document.documentElement.appendChild(orb);
-    dbg('createOrb — orb appended to <html> (documentElement)');
 
-    // Log actual rendered position after paint
+    // Clamp to viewport after paint (desktop-saved position may be offscreen on mobile)
     requestAnimationFrame(() => {
         const rect = orb.getBoundingClientRect();
-        dbg(`  orb post-paint rect: L${Math.round(rect.left)} T${Math.round(rect.top)} W${Math.round(rect.width)} H${Math.round(rect.height)}`);
         const vw = window.innerWidth, vh = window.innerHeight;
-        dbg(`  viewport: ${vw}×${vh} — orb should be visible at bottom-left`);
-
-        // If STILL offscreen somehow, force to center of screen as nuclear option
-        if (rect.width === 0 || rect.height === 0 || rect.right < 0 || rect.left > vw || rect.top > vh || rect.bottom < 0) {
-            dbg('  ⚠ orb STILL offscreen — forcing to center');
-            orb.style.left   = `${Math.round(vw / 2 - 32)}px`;
-            orb.style.top    = `${Math.round(vh / 2 - 32)}px`;
-            orb.style.bottom = 'auto';
+        if (rect.right < 10 || rect.left > vw - 10 || rect.top > vh - 10 || rect.bottom < 10) {
+            orb.style.left   = '16px';
+            orb.style.bottom = '160px';
+            localStorage.removeItem('el_orb_left');
+            localStorage.removeItem('el_orb_bottom');
         }
     });
 
@@ -1616,7 +1591,7 @@ function createOrb() {
     let startX, startY, startLeft, startBottom, dragged = false;
 
     function onMove(e) {
-        e.preventDefault(); // prevent page scroll while dragging orb
+        e.preventDefault();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
         const dx = clientX - startX;
@@ -1634,7 +1609,6 @@ function createOrb() {
         document.removeEventListener('mouseup',   onUp);
         document.removeEventListener('touchmove', onMove);
         document.removeEventListener('touchend',  onUp);
-        // Save position
         localStorage.setItem('el_orb_left',   orb.style.left);
         localStorage.setItem('el_orb_bottom', orb.style.bottom);
     }
@@ -1899,95 +1873,13 @@ function hookEvents() {
     eventSource.on(event_types.SETTINGS_UPDATED, debouncedRender);
 }
 
-// ─── VISUAL DEBUG (remove after orb is working) ──────────────────────────────
-
-const _EL_DEBUG = true; // ← flip to false (or delete this block) once orb works
-
-let _dbgBox = null;
-function dbg(msg) {
-    console.log(`[Ellinia] ${msg}`);
-    if (!_EL_DEBUG) return;
-    if (!_dbgBox) {
-        _dbgBox = document.createElement('div');
-        Object.assign(_dbgBox.style, {
-            position:     'fixed',
-            top:          '0',
-            left:         '0',
-            right:        '0',
-            maxHeight:    '35vh',
-            overflowY:    'auto',
-            background:   'rgba(0,0,0,0.88)',
-            color:        '#0f0',
-            fontFamily:   'monospace',
-            fontSize:     '11px',
-            lineHeight:   '1.4',
-            padding:      '6px 8px',
-            zIndex:       '2147483647',
-            pointerEvents:'auto',
-            whiteSpace:   'pre-wrap',
-            wordBreak:    'break-all',
-        });
-        // Tap to dismiss
-        _dbgBox.addEventListener('click', () => { _dbgBox.style.display = _dbgBox.style.display === 'none' ? 'block' : 'none'; });
-        document.body.appendChild(_dbgBox);
-    }
-    _dbgBox.textContent += `${new Date().toLocaleTimeString()} ${msg}\n`;
-    _dbgBox.scrollTop = _dbgBox.scrollHeight;
-}
-
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 
 jQuery(async () => {
-    dbg(`Init starting — v${EXT_VERSION}`);
-    dbg(`UA: ${navigator.userAgent.slice(0, 80)}`);
-    dbg(`Viewport: ${window.innerWidth}×${window.innerHeight}`);
-    dbg(`structuredClone exists: ${typeof structuredClone !== 'undefined'}`);
-
-    try {
-        initSettings();
-        dbg('✓ initSettings');
-    } catch (err) {
-        dbg(`✗ initSettings FAILED: ${err.message}`);
-    }
-
-    try {
-        loadChatState();
-        dbg('✓ loadChatState');
-    } catch (err) {
-        dbg(`✗ loadChatState FAILED: ${err.message}`);
-    }
-
-    // Orb must survive independently — if HUD creation crashes, the orb still shows
-    try {
-        createOrb();
-        dbg('✓ createOrb');
-        // Verify it's actually in the DOM and visible
-        const orb = document.getElementById('el-orb');
-        if (orb) {
-            const rect = orb.getBoundingClientRect();
-            dbg(`  orb rect: L${Math.round(rect.left)} T${Math.round(rect.top)} W${Math.round(rect.width)} H${Math.round(rect.height)}`);
-            dbg(`  orb display: ${orb.style.display} | position: ${orb.style.position} | zIndex: ${orb.style.zIndex}`);
-            dbg(`  orb parent: ${orb.parentElement?.tagName}#${orb.parentElement?.id || '(none)'}`);
-        } else {
-            dbg('  ⚠ orb NOT in DOM after createOrb()!');
-        }
-    } catch (err) {
-        dbg(`✗ createOrb FAILED: ${err.message}\n  ${err.stack?.split('\n')[1] || ''}`);
-    }
-
-    try {
-        createHUD();
-        dbg('✓ createHUD');
-    } catch (err) {
-        dbg(`✗ createHUD FAILED: ${err.message}`);
-    }
-
-    try {
-        hookEvents();
-        dbg('✓ hookEvents');
-    } catch (err) {
-        dbg(`✗ hookEvents FAILED: ${err.message}`);
-    }
-
-    dbg('Init complete — tap this box to hide/show');
+    try { initSettings(); }  catch (e) { console.error('[Ellinia] initSettings:', e); }
+    try { loadChatState(); } catch (e) { console.error('[Ellinia] loadChatState:', e); }
+    try { createOrb(); }     catch (e) { console.error('[Ellinia] createOrb:', e); }
+    try { createHUD(); }     catch (e) { console.error('[Ellinia] createHUD:', e); }
+    try { hookEvents(); }    catch (e) { console.error('[Ellinia] hookEvents:', e); }
+    console.log(`[Ellinia Tracker v${EXT_VERSION}] Initialized`);
 });
