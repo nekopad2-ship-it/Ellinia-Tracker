@@ -1555,7 +1555,15 @@ function createOrb() {
     orb.style.bottom = savedBottom || '100px';
     orb.style.right  = 'auto';
     // Always show via JS — don't rely on CSS media query (may not fire in ST's mobile webview)
-    orb.style.display = 'flex';
+    orb.style.display     = 'flex';
+    orb.style.zIndex      = '99999';
+    orb.style.background  = '#16213e';
+    orb.style.border      = '2px solid #e8c840';
+    orb.style.borderRadius = '50%';
+    orb.style.width       = '56px';
+    orb.style.height      = '56px';
+    orb.style.alignItems  = 'center';
+    orb.style.justifyContent = 'center';
 
     document.body.appendChild(orb);
 
