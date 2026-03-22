@@ -387,7 +387,7 @@ function renderCharPanel(char) {
     const sid = `skills-${cid.replace(/\W/g,'_')}`;
     html += `<div class="el-section el-collapse" data-target="${sid}">
         <div class="el-sec-title el-toggle">SKILLS (${char.skills?.length||0}) <span class="el-arrow">▼</span></div>
-        <div class="el-collapse-body" id="${sid}">
+        <div class="el-collapse-body collapsed" id="${sid}">
             ${(char.skills||[]).map((sk,i) => `
             <div class="el-skill-edit-row">
                 <select class="el-mini-sel" data-cid="${cid}" data-f="skill.rank.${i}">${RANK_ORDER.map(r=>`<option value="${r}" ${sk.rank===r?'selected':''}>${r}</option>`).join('')}</select>
@@ -409,7 +409,7 @@ function renderCharPanel(char) {
     const TIERS = ['Common','Uncommon','Rare','Epic','Legendary','Unique'];
     html += `<div class="el-section el-collapse" data-target="${eid}">
         <div class="el-sec-title el-toggle">EQUIPMENT <span class="el-arrow">▼</span></div>
-        <div class="el-collapse-body" id="${eid}">
+        <div class="el-collapse-body collapsed" id="${eid}">
             <div class="el-equip-grid">
                 ${EQUIP_SLOTS.map(slot => {
                     const item = char.equipment?.[slot];
@@ -431,7 +431,7 @@ function renderCharPanel(char) {
         <div class="el-sec-title el-toggle">INVENTORY <span class="el-arrow">▼</span>
             <span class="el-mesos-row">◎ <input class="el-vi el-mesos-input" type="number" data-cid="${cid}" data-f="mesos" value="${char.mesos||0}" min="0"/></span>
         </div>
-        <div class="el-collapse-body" id="${iid}">
+        <div class="el-collapse-body collapsed" id="${iid}">
             ${(char.inventory||[]).map((item,i) => {
                 const tierOpts = TIERS.map(t=>`<option value="${t}" ${item.tier===t?'selected':''}>${t}</option>`).join('');
                 return `<div class="el-inv-edit-row">
@@ -454,7 +454,7 @@ function renderCharPanel(char) {
     const xid = `status-${cid.replace(/\W/g,'_')}`;
     html += `<div class="el-section el-collapse" data-target="${xid}">
         <div class="el-sec-title el-toggle">STATUS EFFECTS (${(char.statusEffects||[]).length}) <span class="el-arrow">▼</span></div>
-        <div class="el-collapse-body" id="${xid}">
+        <div class="el-collapse-body collapsed" id="${xid}">
             ${(char.statusEffects||[]).map((fx,i) => `
             <div class="el-status-row">
                 <span class="el-editable el-status-name" data-cid="${cid}" data-f="fx.name.${i}" contenteditable="true">${fx.name}</span>
@@ -504,8 +504,8 @@ function initEditDelegation(hud) {
             else if (f.startsWith('disc.'))       { const d = f.slice(5); if (char.disciplines?.[d]) char.disciplines[d].level = Math.max(1,(char.disciplines[d].level||1)+delta); }
             else if (f === 'threadSightLevel')    { char.threadSightLevel = Math.max(0,Math.min(5,(char.threadSightLevel||0)+delta)); }
             else if (f.startsWith('skill.level.')){ const i=parseInt(f.split('.')[2]); if(char.skills?.[i]) char.skills[i].level=Math.max(1,(char.skills[i].level||1)+delta); }
-            else if (f.startsWith('inv.qty.'))    { const i=parseInt(f.split('.')[2]); if(char.inventory?.[i]){char.inventory[i].quantity=Math.max(0,(char.inventory[i].quantity||1)+delta); if(char.inventory[i].quantity===0)char.inventory.splice(i,1);} }
-            else if (f.startsWith('fx.dur.'))     { const i=parseInt(f.split('.')[2]); if(char.statusEffects?.[i]) char.statusEffects[i].duration=Math.max(0,(char.statusEffects[i].duration??0)+delta); }
+            else if (f.startsWith('inv.qty.'))    { const i=parseInt(f.split('.')[2]); if(char.inventory?.[i]) char.inventory[i].quantity=Math.max(1,(char.inventory[i].quantity||1)+delta); }
+            else if (f.startsWith('fx.dur.'))     { const i=parseInt(f.split('.')[2]); if(char.statusEffects?.[i]) char.statusEffects[i].duration=Math.max(1,(char.statusEffects[i].duration??1)+delta); }
             saveState(); renderHUD(); return;
         }
 
