@@ -306,9 +306,8 @@ function totalLevel(char) {
 function getCharAvatar(char) {
     try {
         if (char.isPlayer) {
-            // user_avatar is the module-level var from script.js — most reliable source
-            const av = user_avatar || getContext().settings?.user_avatar;
-            if (av) return getThumbnailUrl('avatar', av);
+            const av = user_avatar;
+            if (av) return `/User Avatars/${av}`;
             return null;
         } else {
             const name  = char.name?.toLowerCase().trim();
@@ -350,11 +349,15 @@ function renderCharPanel(char) {
         const charName   = ctx.name2 || '{{char}}';
         avatarBlock = `<div class="el-avatar-row">
             <div class="el-avatar-wrap" title="${userName}">
-                ${userAvatar ? `<img class="el-avatar" src="${userAvatar}" alt="user"/>` : `<div class="el-avatar el-avatar-placeholder">U</div>`}
+                ${userAvatar
+                    ? `<img class="el-avatar" src="${userAvatar}" alt="user" onerror="this.outerHTML='<div class=\\"el-avatar el-avatar-placeholder\\">U</div>'"/>`
+                    : `<div class="el-avatar el-avatar-placeholder">U</div>`}
                 <span class="el-avatar-label">${userName}</span>
             </div>
             <div class="el-avatar-wrap" title="${charName}">
-                ${charAvatar ? `<img class="el-avatar" src="${charAvatar}" alt="char"/>` : `<div class="el-avatar el-avatar-placeholder">C</div>`}
+                ${charAvatar
+                    ? `<img class="el-avatar" src="${charAvatar}" alt="char" onerror="this.outerHTML='<div class=\\"el-avatar el-avatar-placeholder\\">C</div>'"/>`
+                    : `<div class="el-avatar el-avatar-placeholder">C</div>`}
                 <span class="el-avatar-label">${charName}</span>
             </div>
         </div>`;
