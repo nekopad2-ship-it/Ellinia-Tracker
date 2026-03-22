@@ -723,3 +723,19 @@
     /* Mobile close button hidden on desktop */
     .el-mobile-close { display: none !important; }
 }
+
+.el-settings-note {
+    font-size:     11px;
+    color:         var(--el-text-dim);
+    line-height:   1.5;
+    margin-bottom: 10px;
+    font-style:    italic;
+}
+
+.el-btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.el-btn-row .el-btn { flex: 1; }
