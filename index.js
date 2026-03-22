@@ -4,8 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { extension_settings, getContext } from '../../../extensions.js';
-import { saveSettingsDebounced } from '../../../../script.js';
-import { eventSource, event_types } from '../../../../script.js';
+import { eventSource, event_types, saveSettingsDebounced, executeSlashCommands } from '../../../../script.js';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
@@ -77,13 +76,10 @@ function makeCharacter(name = '', isPlayer = false, preset = {}) {
 }
 
 const DEFAULT_SETTINGS = {
-    apiType:         'openai',
-    apiUrl:          'https://api.openai.com/v1/chat/completions',
-    apiKey:          '',
-    model:           'gpt-4o-mini',
-    autoUpdate:      true,
-    contextMessages: 3,
-    hudPosition:     { top: 80, right: 20 },
+    connectionProfile: '',   // ST connection profile name for extraction
+    completionPreset:  '',   // ST completion preset name for extraction
+    autoUpdate:        true,
+    contextMessages:   3,
     state: {
         player: null,
         npcs:   {}
@@ -473,31 +469,34 @@ function renderNPCTab() {
 
 function renderSettingsTab() {
     return `
-    <div class="el-settings-group">
-        <div class="el-settings-title">API CONFIGURATION</div>
-        <label class="el-label">Provider
-            <select id="el-api-type" class="el-input">
-                <option value="openai"    ${settings.apiType === 'openai'    ? 'selected' : ''}>OpenAI-compatible</option>
-                <option value="anthropic" ${settings.apiType === 'anthropic' ? 'selected' : ''}>Anthropic</option>
+    <div class="el-settings-group" id="el-api-group">
+        <div class="el-settings-title">CONNECTION</div>
+        <label class="el-label">Connection Profile
+            <select id="el-conn-profile" class="el-input">
+                <option value="">— Loading profiles… —</option>
             </select>
         </label>
-        <label class="el-label">Endpoint URL
-            <input type="text" id="el-api-url" class="el-input" value="${settings.apiUrl || ''}" placeholder="https://api.openai.com/v1/chat/completions"/>
+        <label class="el-label">Completion Preset
+            <select id="el-comp-preset" class="el-input">
+                <option value="">(Use profile default)</option>
+            </select>
         </label>
-        <label class="el-label">API Key
-            <input type="password" id="el-api-key" class="el-input" value="${settings.apiKey || ''}" placeholder="sk-..."/>
-        </label>
-        <label class="el-label">Model
-            <input type="text" id="el-model" class="el-input" value="${settings.model || ''}" placeholder="gpt-4o-mini"/>
-        </label>
-        <label class="el-label">Messages sent per parse
+        <div class="el-btn-row">
+            <button class="el-btn" id="el-save-api">Save</button>
+            <button class="el-btn" id="el-test-btn">Test Connection</button>
+        </div>
+    </div>
+
+    <div class="el-settings-group">
+        <div class="el-settings-title">PARSE SETTINGS</div>
+        <label class="el-label">Context Messages
             <input type="number" id="el-ctx-msgs" class="el-input" value="${settings.contextMessages || 3}" min="1" max="15"/>
         </label>
         <label class="el-label-inline">
             <input type="checkbox" id="el-auto-update" ${settings.autoUpdate ? 'checked' : ''}/>
             Auto-parse after every AI message
         </label>
-        <button class="el-btn" id="el-save-api">Save API Config</button>
+        <button class="el-btn" id="el-save-parse">Save</button>
     </div>
 
     <div class="el-settings-group">
@@ -620,15 +619,37 @@ function bindNPCEvents(root) {
 // ─── SETTINGS EVENTS ─────────────────────────────────────────────────────────
 
 function bindSettingsEvents(root) {
+    // Populate profile dropdown async
+    const profileSel = root.querySelector('#el-conn-profile');
+    const presetSel  = root.querySelector('#el-comp-preset');
+
+    if (profileSel) {
+        getProfileNames().then(names => {
+            profileSel.innerHTML = '<option value="">— Select profile —</option>' +
+                names.map(n => `<option value="${n}" ${settings.connectionProfile === n ? 'selected' : ''}>${n}</option>`).join('');
+        });
+    }
+
+    if (presetSel) {
+        const presets = getPresetNames();
+        presetSel.innerHTML = '<option value="">(Use profile default)</option>' +
+            presets.map(n => `<option value="${n}" ${settings.completionPreset === n ? 'selected' : ''}>${n}</option>`).join('');
+    }
+
     root.querySelector('#el-save-api')?.addEventListener('click', () => {
-        settings.apiType          = root.querySelector('#el-api-type')?.value  || settings.apiType;
-        settings.apiUrl           = root.querySelector('#el-api-url')?.value   || settings.apiUrl;
-        settings.apiKey           = root.querySelector('#el-api-key')?.value   || settings.apiKey;
-        settings.model            = root.querySelector('#el-model')?.value     || settings.model;
-        settings.contextMessages  = parseInt(root.querySelector('#el-ctx-msgs')?.value) || 3;
-        settings.autoUpdate       = root.querySelector('#el-auto-update')?.checked ?? true;
+        settings.connectionProfile = root.querySelector('#el-conn-profile')?.value ?? '';
+        settings.completionPreset  = root.querySelector('#el-comp-preset')?.value  ?? '';
         saveState();
-        showNotif('✓ API config saved');
+        showNotif('✓ Connection saved');
+    });
+
+    root.querySelector('#el-test-btn')?.addEventListener('click', testConnection);
+
+    root.querySelector('#el-save-parse')?.addEventListener('click', () => {
+        settings.contextMessages = parseInt(root.querySelector('#el-ctx-msgs')?.value) || 3;
+        settings.autoUpdate      = root.querySelector('#el-auto-update')?.checked ?? true;
+        saveState();
+        showNotif('✓ Parse settings saved');
     });
 
     root.querySelector('#el-save-player')?.addEventListener('click', () => {
@@ -666,54 +687,103 @@ function showNotif(msg, isError = false) {
     setTimeout(() => { el.classList.remove('visible'); setTimeout(() => el.remove(), 350); }, 2800);
 }
 
-// ─── SECONDARY API CALL ───────────────────────────────────────────────────────
+// ─── PROFILE HELPERS ─────────────────────────────────────────────────────────
+
+async function getProfileNames() {
+    try {
+        const raw = await executeSlashCommands('/profile-list');
+        // executeSlashCommands returns the pipe result as a string
+        const text = typeof raw === 'string' ? raw : raw?.pipe ?? '';
+        return JSON.parse(text.trim());
+    } catch {
+        return [];
+    }
+}
+
+async function getCurrentProfile() {
+    try {
+        const raw = await executeSlashCommands('/profile');
+        return (typeof raw === 'string' ? raw : raw?.pipe ?? '').trim();
+    } catch {
+        return '';
+    }
+}
+
+function getPresetNames() {
+    try {
+        const { getPresetManager } = SillyTavern.getContext();
+        const pm = getPresetManager();
+        // getPresetList returns an array of preset name strings
+        return pm?.getPresetList?.() ?? [];
+    } catch {
+        return [];
+    }
+}
+
+// ─── EXTRACTION VIA ST CONNECTION PROFILE ────────────────────────────────────
 
 async function callExtractionAPI(messageBlock) {
-    const { apiType, apiUrl, apiKey, model } = settings;
+    const { generateRaw } = SillyTavern.getContext();
+    const profileName = settings.connectionProfile;
+    const presetName  = settings.completionPreset;
 
-    if (!apiKey)  { showNotif('⚠ No API key set in CONFIG tab', true); return null; }
-    if (!apiUrl)  { showNotif('⚠ No API URL set in CONFIG tab', true); return null; }
-
-    const headers = { 'Content-Type': 'application/json' };
-    let body;
-
-    if (apiType === 'anthropic') {
-        headers['x-api-key']         = apiKey;
-        headers['anthropic-version'] = '2023-06-01';
-        body = JSON.stringify({
-            model,
-            max_tokens: 1200,
-            system: EXTRACTION_SYSTEM,
-            messages: [{ role: 'user', content: `Extract stat changes from these roleplay messages:\n\n${messageBlock}` }]
-        });
-    } else {
-        // OpenAI-compatible
-        headers['Authorization'] = `Bearer ${apiKey}`;
-        body = JSON.stringify({
-            model,
-            max_tokens:  1200,
-            temperature: 0,
-            messages: [
-                { role: 'system', content: EXTRACTION_SYSTEM },
-                { role: 'user',   content: `Extract stat changes from these roleplay messages:\n\n${messageBlock}` }
-            ]
-        });
+    if (!profileName) {
+        showNotif('⚠ No connection profile selected in CONFIG', true);
+        return null;
     }
 
+    const originalProfile = await getCurrentProfile();
+
     try {
-        const resp = await fetch(apiUrl, { method: 'POST', headers, body });
-        if (!resp.ok) {
-            const errTxt = await resp.text().catch(() => '');
-            showNotif(`API error ${resp.status}: ${errTxt.slice(0, 80)}`, true);
-            return null;
+        // Switch to extraction profile
+        await executeSlashCommands(`/profile ${profileName}`);
+
+        // Optionally switch preset
+        if (presetName) {
+            await executeSlashCommands(`/preset ${presetName}`);
         }
-        const data = await resp.json();
-        return apiType === 'anthropic'
-            ? data.content?.[0]?.text  ?? null
-            : data.choices?.[0]?.message?.content ?? null;
+
+        const prompt = `${EXTRACTION_SYSTEM}\n\nExtract stat changes from these roleplay messages:\n\n${messageBlock}`;
+
+        const result = await generateRaw({ prompt, instructOverride: false });
+        return result ?? null;
+
     } catch (err) {
-        showNotif(`Network error: ${err.message}`, true);
+        showNotif(`Generation error: ${err.message}`, true);
         return null;
+    } finally {
+        // Always restore original profile
+        if (originalProfile) {
+            await executeSlashCommands(`/profile ${originalProfile}`);
+        }
+    }
+}
+
+// ─── TEST CONNECTION ──────────────────────────────────────────────────────────
+
+async function testConnection() {
+    const btn = document.getElementById('el-test-btn');
+    if (btn) { btn.textContent = '…'; btn.disabled = true; }
+
+    const profileName = settings.connectionProfile;
+    if (!profileName) {
+        showNotif('⚠ Select a connection profile first', true);
+        if (btn) { btn.textContent = 'Test Connection'; btn.disabled = false; }
+        return;
+    }
+
+    const { generateRaw } = SillyTavern.getContext();
+    const originalProfile = await getCurrentProfile();
+
+    try {
+        await executeSlashCommands(`/profile ${profileName}`);
+        const result = await generateRaw({ prompt: 'Reply with only the word OK.', max_new_tokens: 10, instructOverride: false });
+        showNotif(result ? `✓ Connected — model replied: "${result.trim().slice(0, 40)}"` : '✓ Connected (empty reply)');
+    } catch (err) {
+        showNotif(`✗ Connection failed: ${err.message}`, true);
+    } finally {
+        if (originalProfile) await executeSlashCommands(`/profile ${originalProfile}`);
+        if (btn) { btn.textContent = 'Test Connection'; btn.disabled = false; }
     }
 }
 
