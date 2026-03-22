@@ -196,9 +196,20 @@ Return ONLY a valid JSON array. Each element represents one character with detec
       { "action": "add"|"remove", "name": string, "duration"?: number, "effect"?: string }
     ],
     "threadSightLevel": number,
+    "greatSageLevel": number,
     "notes": string
   }
 }
+
+SPECIAL ABILITIES:
+• Thread Sight ({{user}} only) — a Goddess-granted sensory skill. Levels 1–5. Upgrades when the narrative explicitly states Ken's Thread Sight improved or leveled up. Do NOT infer upgrades from general perception improvements.
+• Great Sage ({{char}} only) — a built-in analytical familiar. Levels 1–5. Stage names and triggers:
+  Lv.1 Ledger: outputs raw stats and hit probability only, no inference. Triggers when Great Sage is first invoked or gives basic combat data.
+  Lv.2 Ledger: elemental weaknesses and cooldown tracking added. Triggers when Great Sage tracks debuffs or resistances.
+  Lv.3 Ledger: multi-target comparison unlocked. Triggers when Great Sage compares multiple enemies or options simultaneously.
+  Lv.4 Analyst: reads battlefield flow, first conditional recommendations. Triggers when Great Sage gives if/then tactical advice.
+  Lv.5 Analyst: behavioral pattern recognition, basic intent inference in combat. Triggers when Great Sage predicts enemy behavior or intent.
+  Only increment greatSageLevel when the narrative explicitly shows Great Sage demonstrating a new capability tier. Do NOT increment for routine use of existing abilities.
 
 If nothing changed, return [].
 Return ONLY the JSON array. No markdown fences, no explanation, no preamble.`;
@@ -209,6 +220,30 @@ let settings          = {};
 let isParsing         = false;
 let _abortCtrl        = null;
 let _activePlayerView = 'user'; // 'user' | 'char'
+
+// ─── UTILITIES ────────────────────────────────────────────────────────────────
+
+function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+const _elLogEntries = [];
+function elLog(msg) {
+    const ts = new Date().toLocaleTimeString();
+    _elLogEntries.unshift(`[${ts}] ${msg}`);
+    if (_elLogEntries.length > 50) _elLogEntries.pop();
+    const el = document.getElementById('el-debug-log');
+    if (el) el.innerHTML = _elLogEntries.map(l =>
+        `<div class="el-log-line">${escapeHtml(l)}</div>`
+    ).join('');
+    console.debug('[EL]', msg);
+}
 
 // ─── SETTINGS INIT ────────────────────────────────────────────────────────────
 
@@ -222,7 +257,7 @@ function initSettings() {
         if (k !== 'state' && settings[k] === undefined) settings[k] = structuredClone(v);
     }
     // State lives in chat_metadata, not extension_settings — init blank placeholder
-    if (!settings.state) settings.state = { player: makeCharacter('Ken', true), npcs: {} };
+    if (!settings.state) settings.state = { player: makeCharacter(getContext().name1 || 'Player', true), npcs: {} };
 }
 
 // Load per-chat state from chat_metadata (called on init + CHAT_CHANGED)
@@ -388,10 +423,10 @@ function renderCharPanel(char) {
 
     // ── Identity ──────────────────────────────────────────────────────
     let html = `<div class="el-identity">
-        <div class="el-editable el-ident-name" data-cid="${cid}" data-f="name" contenteditable="true">${char.name || '—'}</div>
+        <div class="el-editable el-ident-name" data-cid="${cid}" data-f="name" contenteditable="true">${escapeHtml(char.name) || '—'}</div>
         <div class="el-ident-row">
             <span class="el-ident-label">Class:</span>
-            <span class="el-editable" data-cid="${cid}" data-f="class" contenteditable="true">${char.class || '—'}</span>
+            <span class="el-editable" data-cid="${cid}" data-f="class" contenteditable="true">${escapeHtml(char.class) || '—'}</span>
             ${rankBadge(char.classRank)}
         </div>
         <div class="el-ident-row">
@@ -507,9 +542,9 @@ function renderCharPanel(char) {
                     <span class="el-disc-lvl">Lv.${sk.level}</span>
                     <button class="el-pm-btn small" data-cid="${cid}" data-f="skill.level.${i}" data-d="1">+</button>
                 </div>
-                <span class="el-editable el-skill-name" data-cid="${cid}" data-f="skill.name.${i}" contenteditable="true">${sk.name}</span>
+                <span class="el-editable el-skill-name" data-cid="${cid}" data-f="skill.name.${i}" contenteditable="true">${escapeHtml(sk.name)}</span>
                 <button class="el-rm-btn" data-cid="${cid}" data-f="skill.remove.${i}" title="Remove skill">✕</button>
-                <div class="el-editable el-skill-desc" data-cid="${cid}" data-f="skill.desc.${i}" contenteditable="true">${sk.description||''}</div>
+                <div class="el-editable el-skill-desc" data-cid="${cid}" data-f="skill.desc.${i}" contenteditable="true">${escapeHtml(sk.description||'')}</div>
             </div>`).join('')}
             <button class="el-btn small el-add-btn" data-cid="${cid}" data-f="skill.add">+ Add Skill</button>
         </div>
@@ -547,7 +582,7 @@ function renderCharPanel(char) {
                 const tierOpts = TIERS.map(t=>`<option value="${t}" ${item.tier===t?'selected':''}>${t}</option>`).join('');
                 return `<div class="el-inv-edit-row">
                     <select class="el-mini-sel el-tier-sel" data-cid="${cid}" data-f="inv.tier.${i}">${tierOpts}</select>
-                    <span class="el-editable el-inv-name" data-cid="${cid}" data-f="inv.name.${i}" contenteditable="true">${item.name}</span>
+                    <span class="el-editable el-inv-name" data-cid="${cid}" data-f="inv.name.${i}" contenteditable="true">${escapeHtml(item.name)}</span>
                     <div class="el-pm-btns">
                         <button class="el-pm-btn small" data-cid="${cid}" data-f="inv.qty.${i}" data-d="-1">−</button>
                         <span class="el-disc-lvl">×${item.quantity||1}</span>
@@ -568,14 +603,14 @@ function renderCharPanel(char) {
         <div class="el-collapse-body collapsed" id="${xid}">
             ${(char.statusEffects||[]).map((fx,i) => `
             <div class="el-status-row">
-                <span class="el-editable el-status-name" data-cid="${cid}" data-f="fx.name.${i}" contenteditable="true">${fx.name}</span>
+                <span class="el-editable el-status-name" data-cid="${cid}" data-f="fx.name.${i}" contenteditable="true">${escapeHtml(fx.name)}</span>
                 <div class="el-pm-btns">
                     <button class="el-pm-btn small" data-cid="${cid}" data-f="fx.dur.${i}" data-d="-1">−</button>
                     <span class="el-disc-lvl">${fx.duration??'∞'}t</span>
                     <button class="el-pm-btn small" data-cid="${cid}" data-f="fx.dur.${i}" data-d="1">+</button>
                 </div>
                 <button class="el-rm-btn" data-cid="${cid}" data-f="fx.remove.${i}" title="Remove">✕</button>
-                <div class="el-editable el-status-desc" data-cid="${cid}" data-f="fx.desc.${i}" contenteditable="true">${fx.effect||''}</div>
+                <div class="el-editable el-status-desc" data-cid="${cid}" data-f="fx.desc.${i}" contenteditable="true">${escapeHtml(fx.effect||'')}</div>
             </div>`).join('')}
             ${(char.statusEffects||[]).length === 0 ? '<div class="el-empty">None</div>' : ''}
             <button class="el-btn small el-add-btn" data-cid="${cid}" data-f="fx.add">+ Add Effect</button>
@@ -984,7 +1019,12 @@ function bindSettingsEvents(root) {
 
     root.querySelector('#el-reset-all')?.addEventListener('click', () => {
         if (!confirm('Reset ALL tracked state? This cannot be undone.')) return;
-        settings.state = { player: makeCharacter('Ken', true), npcs: {} };
+        const ctx = getContext();
+        settings.state = {
+            player:     makeCharacter(ctx.name1 || 'Player', true, {}, false),
+            charPlayer: makeCharacter(ctx.name2 || 'Character', false, {}, true),
+            npcs:       {}
+        };
         saveState();
         renderHUD();
         showNotif('State reset');
@@ -1472,22 +1512,31 @@ function createHUD() {
 // ─── EVENT HOOKS ──────────────────────────────────────────────────────────────
 
 function hookEvents() {
+    // Debounced render — skips if user is actively editing a field
+    let _renderDebounce = null;
+    function debouncedRender() {
+        clearTimeout(_renderDebounce);
+        _renderDebounce = setTimeout(() => {
+            // Don't blow away active edits
+            if (document.activeElement?.closest?.('#el-hud [contenteditable], #el-hud input, #el-hud select')) return;
+            renderHUD();
+        }, 1000);
+    }
+
     eventSource.on(event_types.MESSAGE_RECEIVED, () => {
         if (settings.autoUpdate) {
             setTimeout(parseLastMessages, 600);
         }
     });
 
-    // Re-render HUD when chat changes — reload per-chat state and update avatars
     eventSource.on(event_types.CHAT_CHANGED, () => {
         loadChatState();
         renderHUD();
     });
 
-    // Re-render when persona avatar changes
-    eventSource.on(event_types.USER_MESSAGE_RENDERED, () => {
-        renderHUD();
-    });
+    // These only need to refresh avatars — debounce to avoid thrashing during RP
+    eventSource.on(event_types.USER_MESSAGE_RENDERED, debouncedRender);
+    eventSource.on(event_types.SETTINGS_UPDATED, debouncedRender);
 
     // Re-render when ST settings change (persona switch etc)
     eventSource.on(event_types.SETTINGS_UPDATED, () => {
