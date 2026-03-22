@@ -1013,6 +1013,7 @@ async function parseLastMessages() {
         if (msgs.length === 0) { showNotif('No messages to parse'); return; }
 
         const raw = await callExtractionAPI(msgs.join('\n\n'));
+        console.log('[Ellinia Tracker] Raw response:', raw);
         elLog(`Raw: ${raw ? raw.slice(0, 150) : 'null'}`);
         if (!raw) return;
 
