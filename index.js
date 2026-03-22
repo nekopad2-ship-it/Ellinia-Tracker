@@ -1547,6 +1547,16 @@ function createOrb() {
     orb.id    = 'el-orb';
     orb.innerHTML = '<span class="el-orb-glyph">◈</span>';
     orb.title = 'Ellinia Tracker';
+
+    // Set position from saved or default
+    const savedLeft   = localStorage.getItem('el_orb_left');
+    const savedBottom = localStorage.getItem('el_orb_bottom');
+    orb.style.left   = savedLeft   || '16px';
+    orb.style.bottom = savedBottom || '100px';
+    orb.style.right  = 'auto';
+    // Always show via JS — don't rely on CSS media query (may not fire in ST's mobile webview)
+    orb.style.display = 'flex';
+
     document.body.appendChild(orb);
 
     // ── Drag logic ────────────────────────────────────────────────────
@@ -1599,15 +1609,6 @@ function createOrb() {
     orb.addEventListener('click', () => {
         if (!dragged) toggleMobilePanel();
     });
-
-    // Restore saved position
-    const savedLeft   = localStorage.getItem('el_orb_left');
-    const savedBottom = localStorage.getItem('el_orb_bottom');
-    if (savedLeft && savedBottom) {
-        orb.style.left   = savedLeft;
-        orb.style.bottom = savedBottom;
-        orb.style.right  = 'auto';
-    }
 }
 
 function toggleMobilePanel() {
