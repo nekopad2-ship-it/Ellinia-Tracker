@@ -682,19 +682,6 @@ function bindSettingsEvents(root) {
     });
 }
 
-// ─── IN-APP DEBUG LOG ─────────────────────────────────────────────────────────
-
-const _elLog = [];
-const MAX_LOG = 50;
-
-function elLog(msg) {
-    const ts = new Date().toLocaleTimeString();
-    _elLog.unshift(`[${ts}] ${msg}`);
-    if (_elLog.length > MAX_LOG) _elLog.pop();
-    const el = document.getElementById('el-debug-log');
-    if (el) el.innerHTML = _elLog.map(l => `<div class="el-log-line">${l}</div>`).join('');
-}
-
 // ─── NOTIFICATION ─────────────────────────────────────────────────────────────
 
 function showNotif(msg, isError = false) {
