@@ -725,15 +725,16 @@ function renderSettingsTab() {
     </div>`;
 }
 
+// ─── OPEN STATE TRACKER ───────────────────────────────────────────────────────
+// Persists which collapsible IDs are open across re-renders
+
+const _openIds = new Set();
+
 // ─── FULL HUD RENDER ──────────────────────────────────────────────────────────
 
 function renderHUD() {
     const hud = document.getElementById('el-hud');
     if (!hud) return;
-
-    // Snapshot which collapsible bodies are currently OPEN before re-render
-    const openIds = new Set();
-    hud.querySelectorAll('.el-collapse-body:not(.collapsed)').forEach(el => { if (el.id) openIds.add(el.id); });
 
     const playerTab   = hud.querySelector('#el-tab-player');
     const npcTab      = hud.querySelector('#el-tab-npcs');
@@ -743,9 +744,9 @@ function renderHUD() {
     if (npcTab)      npcTab.innerHTML      = renderNPCTab();
     if (settingsTab) settingsTab.innerHTML = renderSettingsTab();
 
-    // Restore open state
-    openIds.forEach(id => {
-        const el = hud.querySelector(`#${CSS.escape(id)}`);
+    // Restore open state from persistent Set
+    _openIds.forEach(id => {
+        const el = document.getElementById(id);
         if (el) {
             el.classList.remove('collapsed');
             const arrow = el.closest('.el-collapse')?.querySelector('.el-arrow');
@@ -766,19 +767,17 @@ function bindCollapsibles(root) {
         const tid    = el.dataset.target;
         const toggle = el.querySelector('.el-toggle');
         if (!toggle || !tid) return;
-        // Remove old handlers by cloning
         const fresh = toggle.cloneNode(true);
         toggle.replaceWith(fresh);
         fresh.addEventListener('click', (e) => {
-            if (e.target.classList.contains('el-remove-npc')) return;
-            // Ignore clicks originating from interactive/editable elements inside the toggle
-            if (e.target.closest('[contenteditable], input, select, button, .el-pm-btn, .el-rm-btn, .el-add-btn')) return;
-            const body  = document.getElementById(tid);
+            if (e.target.closest('[contenteditable], input, select, button')) return;
+            const body = document.getElementById(tid);
             if (!body) return;
-            const open  = !body.classList.contains('collapsed');
-            body.classList.toggle('collapsed', open);
+            const nowOpen = body.classList.contains('collapsed');
+            body.classList.toggle('collapsed', !nowOpen);
             const arrow = fresh.querySelector('.el-arrow');
-            if (arrow) arrow.textContent = open ? '▶' : '▼';
+            if (arrow) arrow.textContent = nowOpen ? '▼' : '▶';
+            if (nowOpen) _openIds.add(tid); else _openIds.delete(tid);
         });
     });
 }
