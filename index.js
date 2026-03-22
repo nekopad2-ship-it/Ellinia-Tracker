@@ -1556,17 +1556,18 @@ function createOrb() {
     orb.title = 'Ellinia Tracker';
 
     // Inline styles include visual properties because the orb lives on <html>
-    // (outside <body>) where ST's CSS variables may not cascade
+    // (outside <body>) where ST's CSS variables may not cascade.
+    // zIndex must be max-int — ST mobile overlays sit above 10000.
     Object.assign(orb.style, {
         display:        'flex',
         position:       'fixed',
-        zIndex:         '10002',
+        zIndex:         '2147483647',
         width:          '56px',
         height:         '56px',
         borderRadius:   '50%',
-        background:     'rgba(22, 33, 62, 0.95)',
-        border:         '2px solid rgba(232, 200, 64, 0.6)',
-        boxShadow:      '0 4px 20px rgba(0,0,0,0.5), 0 0 16px rgba(232, 200, 64, 0.25)',
+        background:     'rgba(30, 40, 70, 0.95)',
+        border:         '2.5px solid #e8c840',
+        boxShadow:      '0 4px 20px rgba(0,0,0,0.5), 0 0 20px rgba(232, 200, 64, 0.4)',
         alignItems:     'center',
         justifyContent: 'center',
         cursor:         'grab',
@@ -1578,10 +1579,23 @@ function createOrb() {
     });
 
     // Restore saved position, or use safe default
+    // Check saved values are sane for current viewport BEFORE applying
     const savedLeft   = localStorage.getItem('el_orb_left');
     const savedBottom = localStorage.getItem('el_orb_bottom');
-    orb.style.left   = savedLeft   || '16px';
-    orb.style.bottom = savedBottom || '160px';
+    const parsedLeft  = parseInt(savedLeft);
+    const parsedBottom = parseInt(savedBottom);
+    const vw = window.innerWidth, vh = window.innerHeight;
+
+    if (!isNaN(parsedLeft) && parsedLeft >= 0 && parsedLeft < vw - 20 &&
+        !isNaN(parsedBottom) && parsedBottom >= 0 && parsedBottom < vh - 20) {
+        orb.style.left   = savedLeft;
+        orb.style.bottom = savedBottom;
+    } else {
+        orb.style.left   = '16px';
+        orb.style.bottom = '160px';
+        localStorage.removeItem('el_orb_left');
+        localStorage.removeItem('el_orb_bottom');
+    }
 
     // Append to <html> — escapes stacking context traps on <body>
     document.documentElement.appendChild(orb);
