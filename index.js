@@ -1,0 +1,969 @@
+// ═══════════════════════════════════════════════════════════════════
+//  ELLINIA TRACKER — SillyTavern Extension
+//  Drop into: SillyTavern/public/extensions/third-party/ellinia-tracker/
+// ═══════════════════════════════════════════════════════════════════
+
+import { extension_settings, getContext, saveSettingsDebounced } from '../../../extensions.js';
+import { eventSource, event_types } from '../../../../script.js';
+
+// ─── CONSTANTS ───────────────────────────────────────────────────────────────
+
+const EXT_NAME    = 'ellinia_tracker';
+const EXT_VERSION = '1.0.0';
+
+const RANK_ORDER  = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'Mythic'];
+const RANK_COLORS = {
+    F: '#888888', E: '#aaaaaa', D: '#52e05a',
+    C: '#52b0e0', B: '#c070f0', A: '#e09c52',
+    S: '#f0e050', Mythic: '#ff5ab0'
+};
+const SOFT_CAPS = { F: 20, E: 35, D: 55, C: 80, B: 120, A: 180, S: 250 };
+const DISCIPLINES = ['Combat', 'Crafting', 'Magic', 'Trade', 'Gathering'];
+const STATS       = ['STR', 'AGI', 'VIT', 'INT', 'WIS', 'LCK'];
+const EQUIP_SLOTS = ['weapon', 'helm', 'chest', 'gloves', 'boots', 'accessory1', 'accessory2'];
+const SLOT_LABELS = {
+    weapon: '⚔ Weapon', helm: '⛉ Helm', chest: '⚁ Chest',
+    gloves: '◌ Gloves', boots: '⬡ Boots', accessory1: '◈ Acc I', accessory2: '◈ Acc II'
+};
+const TIER_COLORS = {
+    Common: '#888888', Uncommon: '#52e05a', Rare: '#5282e0',
+    Epic:   '#c070f0', Legendary: '#e09c52', Unique: '#ff5ab0'
+};
+const ABO_ICONS   = { Alpha: '◆', Beta: '◇', Omega: '○' };
+const STATUS_COLORS = { neutral: '#6a8eaa', heat: '#e05252', rut: '#e09c52' };
+
+// NPC presets with known lore data
+const NPC_PRESETS = {
+    'Hoshi':           { class: 'Dual Blade',     classRank: 'B', aboGender: 'Alpha', adventurerRank: 'B' },
+    'Dokyeom':         { class: 'Blacksmith',      classRank: 'F', aboGender: 'Beta',  adventurerRank: 'F' },
+    'Mira':            { class: 'Guild Registrar', classRank: 'D', aboGender: 'Beta',  adventurerRank: 'D' },
+    'Commander Sera':  { class: 'Warrior',         classRank: 'A', aboGender: 'Beta',  adventurerRank: 'A' },
+    'Calder':          { class: 'Warrior',         classRank: 'C', aboGender: 'Beta',  adventurerRank: 'C' },
+    'Sable':           { class: 'Rogue',           classRank: 'B', aboGender: 'Beta',  adventurerRank: 'B' },
+    'Athena Pierce':   { class: 'Bowmaster',       classRank: 'A', aboGender: 'Beta',  adventurerRank: 'S' },
+    'Grendel':         { class: 'Archmage',        classRank: 'S', aboGender: 'Beta',  adventurerRank: 'S' },
+};
+
+// ─── DATA FACTORIES ───────────────────────────────────────────────────────────
+
+function makeCharacter(name = '', isPlayer = false, preset = {}) {
+    return {
+        name,
+        isPlayer,
+        class:          preset.class         || (isPlayer ? 'Blacksmith' : ''),
+        classRank:      preset.classRank      || 'F',
+        aboGender:      preset.aboGender      || 'Beta',
+        aboStatus:      'neutral',
+        adventurerRank: preset.adventurerRank || 'F',
+        hp:             { current: 100, max: 100 },
+        mana:           { current: 50,  max: 50  },
+        stats:          { STR: 10, AGI: 10, VIT: 10, INT: 10, WIS: 10, LCK: 10 },
+        disciplines: {
+            Combat:    { xp: 0, level: 1 },
+            Crafting:  { xp: 0, level: 1 },
+            Magic:     { xp: 0, level: 1 },
+            Trade:     { xp: 0, level: 1 },
+            Gathering: { xp: 0, level: 1 },
+        },
+        skills:          [],
+        equipment:       { weapon: null, helm: null, chest: null, gloves: null, boots: null, accessory1: null, accessory2: null },
+        inventory:       [],
+        mesos:           0,
+        statusEffects:   [],
+        threadSightLevel: isPlayer ? 1 : 0,   // player-only Goddess skill
+        notes:           '',
+    };
+}
+
+const DEFAULT_SETTINGS = {
+    apiType:         'openai',
+    apiUrl:          'https://api.openai.com/v1/chat/completions',
+    apiKey:          '',
+    model:           'gpt-4o-mini',
+    autoUpdate:      true,
+    contextMessages: 3,
+    hudPosition:     { top: 80, right: 20 },
+    state: {
+        player: null,
+        npcs:   {}
+    }
+};
+
+// ─── EXTRACTION SYSTEM PROMPT ─────────────────────────────────────────────────
+// World-specific — baked from ellinia_master_v21 entries 5,6,8,9,10,11,13,24,32,33,103,141,151
+
+const EXTRACTION_SYSTEM = `You are a precision stat-tracker for a collaborative roleplay set in Ellinia — a MapleStory-inspired isekai world. Your sole function is to read the provided roleplay excerpt and detect any changes to character state that are implied or stated.
+
+== ELLINIA WORLD RULES ==
+
+STATS (6 core attributes, integer values):
+• STR — raw physical force; melee damage, forging quality, carry weight. Primary: Warrior, Blacksmith. Alpha biology adds ~12% STR floor.
+• AGI — speed, evasion, precision. Primary: Rogue, Archer. Drops during Omega active heat; spikes during Alpha rut (at cost of precision).
+• VIT — maximum HP pool, endurance, physical status resistance, recovery rate. Primary: Warrior. Alpha gain bonus VIT under stress.
+• INT — magic damage output, spell efficiency, elemental potency. Primary: Mage. Goddess skills (Thread Sight, Great Sage) scale with INT. Omegas carry slight natural INT uplift.
+• WIS — mana pool size, mana recovery rate, skill discovery rate, crafting insight depth. Primary: Priest, Blacksmith secondary. Omega natural WIS advantage.
+• LCK — crit rate, loot quality multiplier, skill evolution frequency, rare material yield. Summoned Ones carry passive Goddess-origin LCK bonus.
+
+HP AND MANA:
+• HP derives from VIT; has current and max values tracked separately.
+• Mana derives from INT+WIS; has current and max values tracked separately.
+• Mana depletion causes physical backlash; pushing past 0 is dangerous.
+
+DISCIPLINES (5 XP pools, tracked independently):
+• Combat, Crafting, Magic, Trade, Gathering.
+• Total level = sum of all discipline levels. A Blacksmith's Crafting XP matters far more than Combat.
+• XP thresholds: approximately 100 × level^1.5 XP per level.
+
+SKILLS:
+• Every skill has a Rank (F/E/D/C/B/A/S/Mythic) and a Level (1–10 within rank).
+• Skills unlock organically through repeated action, danger, or milestone — never from trainers.
+• Rank F = common, Rank S = continent-famous. Mythic has no confirmed living bearers this era.
+• Level 10 mastery is required before rank evolution is possible.
+
+CLASS SYSTEM:
+• Birthright class is immutable. Social rank F–S. Support classes (Blacksmith, Gatherer, Miner, Alchemist, Builder, Merchant, Armourer) are Rank F–D. Combat classes (Warrior, Mage, Rogue, Archer, Priest → advanced forms) are C–S.
+• Edge Sovereign is an S-class legendary that hides as Dual Blade (B) until triggered by near-death crisis.
+
+ADVENTURER RANK:
+• Separate from class rank. F through S. Capped by class rank — support classes ceiling early.
+
+ABO SUBGENDER (hidden layer, not in Guild records):
+• Alpha: +STR floor, bonus VIT under stress, minor AGI spike in rut.
+• Omega: minor +INT, +WIS; -AGI and -VIT during active heat.
+• Beta: no modifier.
+• Active status: neutral / heat (Omega) / rut (Alpha).
+
+THREAD SIGHT (player Ken's Goddess-gifted skill only — no NPC has this):
+• Level 1: Common-tier materials legible. Level 2: Uncommon. Level 3: Rare + mana reserve assessment. Level 4: weak point detection in combat. Level 5: Epic-tier, full HUD crafting expansion.
+
+EQUIPMENT:
+• Slots: weapon, helm, chest, gloves, boots, accessory1, accessory2.
+• Tiers: Common, Uncommon, Rare, Epic, Legendary, Unique.
+• Each item has a name, tier, and optional runes array (infusion slots).
+• Unique items drop only from Mythical bosses and cannot be crafted.
+
+INVENTORY:
+• Items have name, quantity, and tier.
+• Material tiers mirror equipment tiers.
+
+CURRENCY:
+• Mesos — integer value.
+
+STATUS EFFECTS:
+• Named, with duration (in turns) and an effect description.
+• Poison halves mana recovery and WIS-modified damage per turn. Mana drain, paralysis, etc. are all possible.
+
+== OUTPUT FORMAT ==
+Return ONLY a valid JSON array. Each element represents one character with detected changes:
+{
+  "character": "player" OR "<NPC name as used in the scene>",
+  "updates": {
+    // Include ONLY fields that changed. All fields optional.
+    "name": string,
+    "class": string,
+    "classRank": string,
+    "aboGender": "Alpha"|"Beta"|"Omega",
+    "aboStatus": "neutral"|"heat"|"rut",
+    "adventurerRank": string,
+    "hp": { "current": number, "max": number },
+    "mana": { "current": number, "max": number },
+    "stats": { "STR"?: number, "AGI"?: number, "VIT"?: number, "INT"?: number, "WIS"?: number, "LCK"?: number },
+    "disciplines": {
+      "Combat"?:    { "xp": number, "level": number },
+      "Crafting"?:  { "xp": number, "level": number },
+      "Magic"?:     { "xp": number, "level": number },
+      "Trade"?:     { "xp": number, "level": number },
+      "Gathering"?: { "xp": number, "level": number }
+    },
+    "skills": [
+      { "action": "add"|"update"|"remove", "name": string, "rank"?: string, "level"?: number, "description"?: string }
+    ],
+    "equipment": {
+      "weapon"?:     { "name": string, "tier": string, "runes": string[] } | null,
+      "helm"?:       { "name": string, "tier": string, "runes": string[] } | null,
+      "chest"?:      { "name": string, "tier": string, "runes": string[] } | null,
+      "gloves"?:     { "name": string, "tier": string, "runes": string[] } | null,
+      "boots"?:      { "name": string, "tier": string, "runes": string[] } | null,
+      "accessory1"?: { "name": string, "tier": string, "runes": string[] } | null,
+      "accessory2"?: { "name": string, "tier": string, "runes": string[] } | null
+    },
+    "inventory": [
+      { "action": "add"|"remove"|"update", "name": string, "quantity"?: number, "tier"?: string }
+    ],
+    "mesos": number,
+    "statusEffects": [
+      { "action": "add"|"remove", "name": string, "duration"?: number, "effect"?: string }
+    ],
+    "threadSightLevel": number,
+    "notes": string
+  }
+}
+
+If nothing changed, return [].
+Return ONLY the JSON array. No markdown fences, no explanation, no preamble.`;
+
+// ─── RUNTIME STATE ────────────────────────────────────────────────────────────
+
+let settings   = {};
+let isParsing  = false;
+
+// ─── SETTINGS INIT ────────────────────────────────────────────────────────────
+
+function initSettings() {
+    if (!extension_settings[EXT_NAME]) {
+        extension_settings[EXT_NAME] = structuredClone(DEFAULT_SETTINGS);
+        extension_settings[EXT_NAME].state.player = makeCharacter('Ken', true);
+    }
+    settings = extension_settings[EXT_NAME];
+    // Patch any missing keys from defaults
+    for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
+        if (settings[k] === undefined) settings[k] = structuredClone(v);
+    }
+    if (!settings.state) settings.state = { player: makeCharacter('Ken', true), npcs: {} };
+    if (!settings.state.player) settings.state.player = makeCharacter('Ken', true);
+    if (!settings.state.npcs)   settings.state.npcs   = {};
+}
+
+function saveState() {
+    extension_settings[EXT_NAME] = settings;
+    saveSettingsDebounced();
+}
+
+// ─── RENDER HELPERS ───────────────────────────────────────────────────────────
+
+function rankBadge(rank = 'F') {
+    const color = RANK_COLORS[rank] || '#888';
+    return `<span class="el-badge el-rank" style="color:${color};border-color:${color}40">${rank}</span>`;
+}
+
+function tierBadge(tier = 'Common') {
+    const color = TIER_COLORS[tier] || '#888';
+    return `<span class="el-badge el-tier" style="color:${color};border-color:${color}40">${tier}</span>`;
+}
+
+function hpBar(current, max) {
+    const pct = max > 0 ? Math.min(100, Math.round((current / max) * 100)) : 0;
+    const critical = pct < 25;
+    return `<div class="el-bar-row">
+        <span class="el-bar-label">HP</span>
+        <div class="el-bar-track">
+            <div class="el-bar-fill el-hp${critical ? ' critical' : ''}" style="width:${pct}%"></div>
+        </div>
+        <span class="el-bar-val">${current}/${max}</span>
+    </div>`;
+}
+
+function mpBar(current, max) {
+    const pct = max > 0 ? Math.min(100, Math.round((current / max) * 100)) : 0;
+    return `<div class="el-bar-row">
+        <span class="el-bar-label">MP</span>
+        <div class="el-bar-track">
+            <div class="el-bar-fill el-mp" style="width:${pct}%"></div>
+        </div>
+        <span class="el-bar-val">${current}/${max}</span>
+    </div>`;
+}
+
+function discBar(name, data) {
+    const toNext  = Math.max(1, Math.round(100 * Math.pow(data.level, 1.5)));
+    const xpMod   = data.xp % toNext;
+    const pct     = Math.min(100, Math.round((xpMod / toNext) * 100));
+    return `<div class="el-disc-row">
+        <span class="el-disc-name">${name}</span>
+        <div class="el-bar-track slim">
+            <div class="el-bar-fill el-xp" style="width:${pct}%"></div>
+        </div>
+        <span class="el-disc-lvl">Lv.${data.level}</span>
+    </div>`;
+}
+
+function totalLevel(char) {
+    return DISCIPLINES.reduce((s, d) => s + (char.disciplines?.[d]?.level || 0), 0);
+}
+
+// ─── CHARACTER PANEL RENDERER ─────────────────────────────────────────────────
+
+function renderCharPanel(char) {
+    const capped = SOFT_CAPS[char.classRank] || 20;
+
+    // ── Identity block ──────────────────────────────────────────────
+    const aboColor  = STATUS_COLORS[char.aboStatus] || '#888';
+    const aboIcon   = ABO_ICONS[char.aboGender]     || '◇';
+    const statusTag = char.aboStatus !== 'neutral'
+        ? `<span class="el-abo-active" style="color:${aboColor}">[${char.aboStatus.toUpperCase()}]</span>`
+        : '';
+
+    let html = `<div class="el-identity">
+        <div class="el-ident-name">${char.name || '—'}</div>
+        <div class="el-ident-sub">
+            <span>${char.class || '—'} ${rankBadge(char.classRank)}</span>
+            <span class="el-adv">ADV ${rankBadge(char.adventurerRank)}</span>
+        </div>
+        <div class="el-ident-sub2">
+            <span class="el-abo">${aboIcon} ${char.aboGender} ${statusTag}</span>
+            <span class="el-total-lv">∑ Lv.${totalLevel(char)}</span>
+        </div>
+    </div>`;
+
+    // ── HP / MP bars ─────────────────────────────────────────────────
+    html += `<div class="el-section">
+        ${hpBar(char.hp.current, char.hp.max)}
+        ${mpBar(char.mana.current, char.mana.max)}
+    </div>`;
+
+    // ── Thread Sight (player only) ────────────────────────────────────
+    if (char.isPlayer && char.threadSightLevel > 0) {
+        const tsDesc = ['—', 'Common legible', 'Uncommon legible', 'Rare legible + mana read', 'Weak point detection', 'Epic legible + full HUD'][char.threadSightLevel] || '?';
+        html += `<div class="el-section el-ts-section">
+            <div class="el-sec-title">◈ THREAD SIGHT</div>
+            <div class="el-ts-row">
+                ${[1,2,3,4,5].map(i =>
+                    `<div class="el-ts-pip${i <= char.threadSightLevel ? ' active' : ''}" title="Level ${i}"></div>`
+                ).join('')}
+                <span class="el-ts-desc">Lv.${char.threadSightLevel} — ${tsDesc}</span>
+            </div>
+        </div>`;
+    }
+
+    // ── Stats grid ────────────────────────────────────────────────────
+    html += `<div class="el-section">
+        <div class="el-sec-title">ATTRIBUTES <span class="el-cap-note">soft cap: ${capped}</span></div>
+        <div class="el-stats-grid">
+            ${STATS.map(s => {
+                const val   = char.stats?.[s] || 0;
+                const pct   = Math.min(100, Math.round((val / capped) * 100));
+                const over  = val >= capped;
+                return `<div class="el-stat${over ? ' overcap' : ''}">
+                    <span class="el-stat-name">${s}</span>
+                    <div class="el-stat-track"><div class="el-stat-fill" style="width:${pct}%"></div></div>
+                    <span class="el-stat-val">${val}</span>
+                </div>`;
+            }).join('')}
+        </div>
+    </div>`;
+
+    // ── Disciplines ────────────────────────────────────────────────────
+    html += `<div class="el-section">
+        <div class="el-sec-title">DISCIPLINES</div>
+        ${DISCIPLINES.map(d => discBar(d, char.disciplines?.[d] || { xp: 0, level: 1 })).join('')}
+    </div>`;
+
+    // ── Skills (collapsible) ───────────────────────────────────────────
+    if (char.skills?.length > 0) {
+        const sid = `skills-${char.name.replace(/\s+/g, '_')}`;
+        html += `<div class="el-section el-collapse" data-target="${sid}">
+            <div class="el-sec-title el-toggle">SKILLS (${char.skills.length}) <span class="el-arrow">▼</span></div>
+            <div class="el-collapse-body" id="${sid}">
+                ${char.skills.map(sk => `
+                <div class="el-skill-row">
+                    ${rankBadge(sk.rank)} <span class="el-skill-lv">Lv.${sk.level}</span>
+                    <span class="el-skill-name">${sk.name}</span>
+                    ${sk.description ? `<div class="el-skill-desc">${sk.description}</div>` : ''}
+                </div>`).join('')}
+            </div>
+        </div>`;
+    }
+
+    // ── Equipment (collapsible) ─────────────────────────────────────────
+    const eid = `equip-${char.name.replace(/\s+/g, '_')}`;
+    html += `<div class="el-section el-collapse" data-target="${eid}">
+        <div class="el-sec-title el-toggle">EQUIPMENT <span class="el-arrow">▼</span></div>
+        <div class="el-collapse-body" id="${eid}">
+            <div class="el-equip-grid">
+                ${EQUIP_SLOTS.map(slot => {
+                    const item = char.equipment?.[slot];
+                    return `<div class="el-equip-slot${item ? ' filled' : ''}">
+                        <span class="el-slot-label">${SLOT_LABELS[slot]}</span>
+                        ${item
+                            ? `<span class="el-slot-item">${tierBadge(item.tier)} ${item.name}${item.runes?.length ? ` <span class="el-runes">+${item.runes.length}r</span>` : ''}</span>`
+                            : '<span class="el-slot-empty">—</span>'}
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>
+    </div>`;
+
+    // ── Inventory + Mesos (collapsible) ─────────────────────────────────
+    const iid = `inv-${char.name.replace(/\s+/g, '_')}`;
+    html += `<div class="el-section el-collapse" data-target="${iid}">
+        <div class="el-sec-title el-toggle">INVENTORY <span class="el-arrow">▼</span>
+            <span class="el-mesos">◎ ${(char.mesos || 0).toLocaleString()}</span>
+        </div>
+        <div class="el-collapse-body" id="${iid}">
+            ${char.inventory?.length > 0
+                ? char.inventory.map(item => `
+                    <div class="el-inv-row">
+                        ${tierBadge(item.tier || 'Common')}
+                        <span class="el-inv-name">${item.name}</span>
+                        <span class="el-inv-qty">×${item.quantity || 1}</span>
+                    </div>`).join('')
+                : '<div class="el-empty">Empty</div>'}
+        </div>
+    </div>`;
+
+    // ── Status Effects ─────────────────────────────────────────────────
+    if (char.statusEffects?.length > 0) {
+        html += `<div class="el-section el-status-section">
+            <div class="el-sec-title">STATUS EFFECTS</div>
+            ${char.statusEffects.map(fx => `
+            <div class="el-status-row">
+                <span class="el-status-name">${fx.name}</span>
+                ${fx.duration != null ? `<span class="el-status-dur">${fx.duration}t</span>` : ''}
+                ${fx.effect ? `<span class="el-status-desc">${fx.effect}</span>` : ''}
+            </div>`).join('')}
+        </div>`;
+    }
+
+    // ── Notes ──────────────────────────────────────────────────────────
+    if (char.notes) {
+        html += `<div class="el-section el-notes">${char.notes}</div>`;
+    }
+
+    return html;
+}
+
+// ─── NPC TAB RENDERER ─────────────────────────────────────────────────────────
+
+function renderNPCTab() {
+    const npcs   = settings.state.npcs;
+    const names  = Object.keys(npcs);
+
+    // Build preset options
+    const presetOptions = Object.keys(NPC_PRESETS)
+        .filter(n => !npcs[n])
+        .map(n => `<option value="${n}">${n}</option>`)
+        .join('');
+
+    let html = `<div class="el-npc-toolbar">
+        ${presetOptions ? `
+        <select id="el-preset-select" class="el-select">
+            <option value="">— Quick add NPC —</option>
+            ${presetOptions}
+        </select>
+        <button class="el-btn small" id="el-add-preset">Add</button>
+        ` : ''}
+        <button class="el-btn small" id="el-add-custom-npc">+ Custom</button>
+    </div>`;
+
+    if (names.length === 0) {
+        html += `<div class="el-empty" style="margin-top:16px">No NPCs tracked. Add from the quick-add menu above.</div>`;
+    } else {
+        html += names.map(name => {
+            const npc = npcs[name];
+            const cid = `npc-body-${name.replace(/\s+/g, '_')}`;
+            return `<div class="el-npc-card el-collapse" data-target="${cid}">
+                <div class="el-npc-header el-toggle">
+                    <span class="el-npc-name">${name}</span>
+                    <span class="el-npc-meta">${npc.class || '—'} ${rankBadge(npc.classRank)}</span>
+                    <button class="el-btn tiny el-remove-npc" data-npc="${name}" title="Remove NPC">✕</button>
+                    <span class="el-arrow">▼</span>
+                </div>
+                <div class="el-collapse-body collapsed el-npc-body" id="${cid}">
+                    ${renderCharPanel(npc)}
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    return html;
+}
+
+// ─── SETTINGS TAB RENDERER ───────────────────────────────────────────────────
+
+function renderSettingsTab() {
+    return `
+    <div class="el-settings-group">
+        <div class="el-settings-title">API CONFIGURATION</div>
+        <label class="el-label">Provider
+            <select id="el-api-type" class="el-input">
+                <option value="openai"    ${settings.apiType === 'openai'    ? 'selected' : ''}>OpenAI-compatible</option>
+                <option value="anthropic" ${settings.apiType === 'anthropic' ? 'selected' : ''}>Anthropic</option>
+            </select>
+        </label>
+        <label class="el-label">Endpoint URL
+            <input type="text" id="el-api-url" class="el-input" value="${settings.apiUrl || ''}" placeholder="https://api.openai.com/v1/chat/completions"/>
+        </label>
+        <label class="el-label">API Key
+            <input type="password" id="el-api-key" class="el-input" value="${settings.apiKey || ''}" placeholder="sk-..."/>
+        </label>
+        <label class="el-label">Model
+            <input type="text" id="el-model" class="el-input" value="${settings.model || ''}" placeholder="gpt-4o-mini"/>
+        </label>
+        <label class="el-label">Messages sent per parse
+            <input type="number" id="el-ctx-msgs" class="el-input" value="${settings.contextMessages || 3}" min="1" max="15"/>
+        </label>
+        <label class="el-label-inline">
+            <input type="checkbox" id="el-auto-update" ${settings.autoUpdate ? 'checked' : ''}/>
+            Auto-parse after every AI message
+        </label>
+        <button class="el-btn" id="el-save-api">Save API Config</button>
+    </div>
+
+    <div class="el-settings-group">
+        <div class="el-settings-title">PLAYER CHARACTER</div>
+        <label class="el-label">Name
+            <input type="text" id="el-p-name" class="el-input" value="${settings.state.player.name || ''}"/>
+        </label>
+        <label class="el-label">Class
+            <input type="text" id="el-p-class" class="el-input" value="${settings.state.player.class || ''}"/>
+        </label>
+        <label class="el-label">Class Rank
+            <select id="el-p-classrank" class="el-input">
+                ${RANK_ORDER.filter(r => r !== 'Mythic').map(r =>
+                    `<option ${settings.state.player.classRank === r ? 'selected' : ''}>${r}</option>`
+                ).join('')}
+            </select>
+        </label>
+        <label class="el-label">ABO Subgender
+            <select id="el-p-abo" class="el-input">
+                ${['Alpha','Beta','Omega'].map(g =>
+                    `<option ${settings.state.player.aboGender === g ? 'selected' : ''}>${g}</option>`
+                ).join('')}
+            </select>
+        </label>
+        <label class="el-label">Adventurer Rank
+            <select id="el-p-advrank" class="el-input">
+                ${RANK_ORDER.filter(r => r !== 'Mythic').map(r =>
+                    `<option ${settings.state.player.adventurerRank === r ? 'selected' : ''}>${r}</option>`
+                ).join('')}
+            </select>
+        </label>
+        <label class="el-label">Thread Sight Level
+            <input type="number" id="el-p-ts" class="el-input" value="${settings.state.player.threadSightLevel || 1}" min="0" max="5"/>
+        </label>
+        <button class="el-btn" id="el-save-player">Save Player</button>
+    </div>
+
+    <div class="el-settings-group el-danger-group">
+        <div class="el-settings-title">DANGER ZONE</div>
+        <button class="el-btn danger" id="el-reset-all">↺ Reset All Tracked State</button>
+    </div>`;
+}
+
+// ─── FULL HUD RENDER ──────────────────────────────────────────────────────────
+
+function renderHUD() {
+    const hud = document.getElementById('el-hud');
+    if (!hud) return;
+
+    const playerTab   = hud.querySelector('#el-tab-player');
+    const npcTab      = hud.querySelector('#el-tab-npcs');
+    const settingsTab = hud.querySelector('#el-tab-settings');
+
+    if (playerTab)   playerTab.innerHTML   = renderCharPanel(settings.state.player);
+    if (npcTab)      npcTab.innerHTML      = renderNPCTab();
+    if (settingsTab) settingsTab.innerHTML = renderSettingsTab();
+
+    bindCollapsibles(hud);
+    bindNPCEvents(hud);
+    bindSettingsEvents(hud);
+}
+
+// ─── COLLAPSIBLE BINDING ──────────────────────────────────────────────────────
+
+function bindCollapsibles(root) {
+    root.querySelectorAll('.el-collapse').forEach(el => {
+        const tid    = el.dataset.target;
+        const toggle = el.querySelector('.el-toggle');
+        if (!toggle || !tid) return;
+        // Remove old handlers by cloning
+        const fresh = toggle.cloneNode(true);
+        toggle.replaceWith(fresh);
+        fresh.addEventListener('click', (e) => {
+            if (e.target.classList.contains('el-remove-npc')) return;
+            const body  = document.getElementById(tid);
+            if (!body) return;
+            const open  = !body.classList.contains('collapsed');
+            body.classList.toggle('collapsed', open);
+            const arrow = fresh.querySelector('.el-arrow');
+            if (arrow) arrow.textContent = open ? '▶' : '▼';
+        });
+    });
+}
+
+// ─── NPC EVENTS ──────────────────────────────────────────────────────────────
+
+function bindNPCEvents(root) {
+    root.querySelector('#el-add-preset')?.addEventListener('click', () => {
+        const sel  = root.querySelector('#el-preset-select');
+        const name = sel?.value;
+        if (!name) return;
+        const preset = NPC_PRESETS[name] || {};
+        settings.state.npcs[name] = makeCharacter(name, false, preset);
+        saveState();
+        renderHUD();
+    });
+
+    root.querySelector('#el-add-custom-npc')?.addEventListener('click', () => {
+        const name = prompt('NPC name:')?.trim();
+        if (!name) return;
+        if (settings.state.npcs[name]) { showNotif(`${name} already tracked`); return; }
+        settings.state.npcs[name] = makeCharacter(name, false);
+        saveState();
+        renderHUD();
+    });
+
+    root.querySelectorAll('.el-remove-npc').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const name = btn.dataset.npc;
+            if (name && confirm(`Remove ${name} from tracker?`)) {
+                delete settings.state.npcs[name];
+                saveState();
+                renderHUD();
+            }
+        });
+    });
+}
+
+// ─── SETTINGS EVENTS ─────────────────────────────────────────────────────────
+
+function bindSettingsEvents(root) {
+    root.querySelector('#el-save-api')?.addEventListener('click', () => {
+        settings.apiType          = root.querySelector('#el-api-type')?.value  || settings.apiType;
+        settings.apiUrl           = root.querySelector('#el-api-url')?.value   || settings.apiUrl;
+        settings.apiKey           = root.querySelector('#el-api-key')?.value   || settings.apiKey;
+        settings.model            = root.querySelector('#el-model')?.value     || settings.model;
+        settings.contextMessages  = parseInt(root.querySelector('#el-ctx-msgs')?.value) || 3;
+        settings.autoUpdate       = root.querySelector('#el-auto-update')?.checked ?? true;
+        saveState();
+        showNotif('✓ API config saved');
+    });
+
+    root.querySelector('#el-save-player')?.addEventListener('click', () => {
+        const p = settings.state.player;
+        p.name             = root.querySelector('#el-p-name')?.value     || p.name;
+        p.class            = root.querySelector('#el-p-class')?.value    || p.class;
+        p.classRank        = root.querySelector('#el-p-classrank')?.value|| p.classRank;
+        p.aboGender        = root.querySelector('#el-p-abo')?.value      || p.aboGender;
+        p.adventurerRank   = root.querySelector('#el-p-advrank')?.value  || p.adventurerRank;
+        p.threadSightLevel = parseInt(root.querySelector('#el-p-ts')?.value) || p.threadSightLevel;
+        saveState();
+        renderHUD();
+        showNotif('✓ Player saved');
+    });
+
+    root.querySelector('#el-reset-all')?.addEventListener('click', () => {
+        if (!confirm('Reset ALL tracked state? This cannot be undone.')) return;
+        settings.state = { player: makeCharacter('Ken', true), npcs: {} };
+        saveState();
+        renderHUD();
+        showNotif('State reset');
+    });
+}
+
+// ─── NOTIFICATION ─────────────────────────────────────────────────────────────
+
+function showNotif(msg, isError = false) {
+    document.getElementById('el-notif')?.remove();
+    const el = document.createElement('div');
+    el.id        = 'el-notif';
+    el.className = `el-notif${isError ? ' error' : ''}`;
+    el.textContent = msg;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('visible'));
+    setTimeout(() => { el.classList.remove('visible'); setTimeout(() => el.remove(), 350); }, 2800);
+}
+
+// ─── SECONDARY API CALL ───────────────────────────────────────────────────────
+
+async function callExtractionAPI(messageBlock) {
+    const { apiType, apiUrl, apiKey, model } = settings;
+
+    if (!apiKey)  { showNotif('⚠ No API key set in CONFIG tab', true); return null; }
+    if (!apiUrl)  { showNotif('⚠ No API URL set in CONFIG tab', true); return null; }
+
+    const headers = { 'Content-Type': 'application/json' };
+    let body;
+
+    if (apiType === 'anthropic') {
+        headers['x-api-key']         = apiKey;
+        headers['anthropic-version'] = '2023-06-01';
+        body = JSON.stringify({
+            model,
+            max_tokens: 1200,
+            system: EXTRACTION_SYSTEM,
+            messages: [{ role: 'user', content: `Extract stat changes from these roleplay messages:\n\n${messageBlock}` }]
+        });
+    } else {
+        // OpenAI-compatible
+        headers['Authorization'] = `Bearer ${apiKey}`;
+        body = JSON.stringify({
+            model,
+            max_tokens:  1200,
+            temperature: 0,
+            messages: [
+                { role: 'system', content: EXTRACTION_SYSTEM },
+                { role: 'user',   content: `Extract stat changes from these roleplay messages:\n\n${messageBlock}` }
+            ]
+        });
+    }
+
+    try {
+        const resp = await fetch(apiUrl, { method: 'POST', headers, body });
+        if (!resp.ok) {
+            const errTxt = await resp.text().catch(() => '');
+            showNotif(`API error ${resp.status}: ${errTxt.slice(0, 80)}`, true);
+            return null;
+        }
+        const data = await resp.json();
+        return apiType === 'anthropic'
+            ? data.content?.[0]?.text  ?? null
+            : data.choices?.[0]?.message?.content ?? null;
+    } catch (err) {
+        showNotif(`Network error: ${err.message}`, true);
+        return null;
+    }
+}
+
+// ─── APPLY UPDATES ────────────────────────────────────────────────────────────
+
+function applyUpdates(char, updates) {
+    if (!char || !updates) return;
+
+    // Scalar top-level fields
+    for (const f of ['name', 'class', 'classRank', 'aboGender', 'aboStatus', 'adventurerRank', 'threadSightLevel', 'mesos', 'notes']) {
+        if (updates[f] !== undefined) char[f] = updates[f];
+    }
+
+    // HP / Mana (partial merge)
+    if (updates.hp)   char.hp   = { ...char.hp,   ...updates.hp   };
+    if (updates.mana) char.mana = { ...char.mana, ...updates.mana };
+
+    // Stats (partial merge — only override provided keys)
+    if (updates.stats) char.stats = { ...char.stats, ...updates.stats };
+
+    // Disciplines
+    if (updates.disciplines) {
+        for (const [disc, val] of Object.entries(updates.disciplines)) {
+            if (char.disciplines[disc]) {
+                char.disciplines[disc] = { ...char.disciplines[disc], ...val };
+            }
+        }
+    }
+
+    // Skills (add / update / remove)
+    if (updates.skills) {
+        for (const sk of updates.skills) {
+            if (sk.action === 'add') {
+                if (!char.skills.find(s => s.name === sk.name)) {
+                    char.skills.push({ name: sk.name, rank: sk.rank || 'F', level: sk.level || 1, description: sk.description || '' });
+                }
+            } else if (sk.action === 'update') {
+                const ex = char.skills.find(s => s.name === sk.name);
+                if (ex) Object.assign(ex, { rank: sk.rank ?? ex.rank, level: sk.level ?? ex.level, description: sk.description ?? ex.description });
+            } else if (sk.action === 'remove') {
+                char.skills = char.skills.filter(s => s.name !== sk.name);
+            }
+        }
+    }
+
+    // Equipment (slot assignment — null removes the slot)
+    if (updates.equipment) {
+        for (const [slot, item] of Object.entries(updates.equipment)) {
+            if (EQUIP_SLOTS.includes(slot)) char.equipment[slot] = item;
+        }
+    }
+
+    // Inventory
+    if (updates.inventory) {
+        for (const item of updates.inventory) {
+            if (item.action === 'add') {
+                const ex = char.inventory.find(i => i.name === item.name);
+                if (ex) ex.quantity = (ex.quantity || 1) + (item.quantity || 1);
+                else    char.inventory.push({ name: item.name, quantity: item.quantity || 1, tier: item.tier || 'Common' });
+            } else if (item.action === 'remove') {
+                char.inventory = char.inventory.filter(i => i.name !== item.name);
+            } else if (item.action === 'update') {
+                const ex = char.inventory.find(i => i.name === item.name);
+                if (ex) Object.assign(ex, item);
+            }
+        }
+    }
+
+    // Status effects
+    if (updates.statusEffects) {
+        for (const fx of updates.statusEffects) {
+            if (fx.action === 'add') {
+                if (!char.statusEffects.find(s => s.name === fx.name)) {
+                    char.statusEffects.push({ name: fx.name, duration: fx.duration, effect: fx.effect || '' });
+                }
+            } else if (fx.action === 'remove') {
+                char.statusEffects = char.statusEffects.filter(s => s.name !== fx.name);
+            }
+        }
+    }
+}
+
+// ─── PARSE TRIGGER ────────────────────────────────────────────────────────────
+
+async function parseLastMessages() {
+    if (isParsing) return;
+    isParsing = true;
+
+    const btn = document.getElementById('el-parse-btn');
+    if (btn) btn.classList.add('spinning');
+    showNotif('Parsing…');
+
+    try {
+        const ctx     = getContext();
+        const chat    = ctx.chat || [];
+        const count   = Math.min(settings.contextMessages || 3, chat.length);
+        const msgs    = chat.slice(-count).map(m =>
+            `[${m.is_user ? 'USER' : 'AI'}]: ${(m.mes || '').trim()}`
+        );
+
+        if (msgs.length === 0) { showNotif('No messages to parse'); return; }
+
+        const raw = await callExtractionAPI(msgs.join('\n\n'));
+        if (!raw) return;
+
+        let updates;
+        try {
+            updates = JSON.parse(raw.replace(/```(?:json)?|```/g, '').trim());
+        } catch {
+            showNotif('⚠ Model returned unparseable JSON', true);
+            console.warn('[Ellinia Tracker] Raw extraction response:', raw);
+            return;
+        }
+
+        if (!Array.isArray(updates) || updates.length === 0) {
+            showNotif('No state changes detected');
+            return;
+        }
+
+        let changed = 0;
+        for (const upd of updates) {
+            if (!upd.character || !upd.updates) continue;
+            if (upd.character === 'player') {
+                applyUpdates(settings.state.player, upd.updates);
+                changed++;
+            } else if (settings.state.npcs[upd.character]) {
+                applyUpdates(settings.state.npcs[upd.character], upd.updates);
+                changed++;
+            }
+        }
+
+        if (changed > 0) {
+            saveState();
+            renderHUD();
+            showNotif(`✓ Updated ${changed} character${changed !== 1 ? 's' : ''}`);
+        } else {
+            showNotif('No tracked characters found in response');
+        }
+
+    } finally {
+        isParsing = false;
+        if (btn) btn.classList.remove('spinning');
+    }
+}
+
+// ─── TAB SYSTEM ──────────────────────────────────────────────────────────────
+
+function bindTabs(hud) {
+    hud.querySelectorAll('.el-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            hud.querySelectorAll('.el-tab-btn').forEach(b => b.classList.remove('active'));
+            hud.querySelectorAll('.el-tab-pane').forEach(p => p.classList.add('hidden'));
+            btn.classList.add('active');
+            hud.querySelector(`#el-tab-${btn.dataset.tab}`)?.classList.remove('hidden');
+        });
+    });
+}
+
+// ─── DRAG ─────────────────────────────────────────────────────────────────────
+
+function makeDraggable(hud) {
+    const handle = hud.querySelector('.el-hud-header');
+    if (!handle) return;
+    let dragging = false, ox = 0, oy = 0;
+
+    handle.addEventListener('mousedown', (e) => {
+        if (e.target.tagName === 'BUTTON') return;
+        dragging = true;
+        const r = hud.getBoundingClientRect();
+        ox = e.clientX - r.left;
+        oy = e.clientY - r.top;
+        hud.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        hud.style.left  = `${Math.max(0, e.clientX - ox)}px`;
+        hud.style.top   = `${Math.max(0, e.clientY - oy)}px`;
+        hud.style.right = 'auto';
+    });
+
+    document.addEventListener('mouseup', () => { dragging = false; hud.style.userSelect = ''; });
+}
+
+// ─── HUD CREATION ─────────────────────────────────────────────────────────────
+
+function createHUD() {
+    if (document.getElementById('el-hud')) return;
+
+    const hud = document.createElement('div');
+    hud.id = 'el-hud';
+    hud.innerHTML = `
+        <div class="el-hud-header">
+            <div class="el-hud-title">
+                <span class="el-hud-glyph">◈</span>
+                <span>ELLINIA</span>
+                <span class="el-hud-sub">SYSTEM INTERFACE</span>
+            </div>
+            <div class="el-hud-controls">
+                <button class="el-icon-btn" id="el-parse-btn" title="Parse last messages">⟳</button>
+                <button class="el-icon-btn" id="el-minimize-btn" title="Minimize">−</button>
+            </div>
+        </div>
+        <div class="el-hud-body" id="el-hud-body">
+            <div class="el-tabs">
+                <button class="el-tab-btn active" data-tab="player">PLAYER</button>
+                <button class="el-tab-btn" data-tab="npcs">ROSTER</button>
+                <button class="el-tab-btn" data-tab="settings">CONFIG</button>
+            </div>
+            <div class="el-tab-pane el-scroll" id="el-tab-player"></div>
+            <div class="el-tab-pane el-scroll hidden" id="el-tab-npcs"></div>
+            <div class="el-tab-pane el-scroll hidden" id="el-tab-settings"></div>
+        </div>`;
+
+    const { top, right } = settings.hudPosition || { top: 80, right: 20 };
+    hud.style.top   = `${top}px`;
+    hud.style.right = `${right}px`;
+
+    document.body.appendChild(hud);
+
+    // Minimize
+    hud.querySelector('#el-minimize-btn').addEventListener('click', () => {
+        const body  = hud.querySelector('#el-hud-body');
+        const minimized = body.classList.toggle('hidden');
+        hud.querySelector('#el-minimize-btn').textContent = minimized ? '+' : '−';
+    });
+
+    // Parse
+    hud.querySelector('#el-parse-btn').addEventListener('click', parseLastMessages);
+
+    makeDraggable(hud);
+    bindTabs(hud);
+    renderHUD();
+}
+
+// ─── EVENT HOOKS ──────────────────────────────────────────────────────────────
+
+function hookEvents() {
+    eventSource.on(event_types.MESSAGE_RECEIVED, () => {
+        if (settings.autoUpdate) {
+            // Short delay to ensure ST has fully appended the message
+            setTimeout(parseLastMessages, 600);
+        }
+    });
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+
+jQuery(async () => {
+    initSettings();
+    createHUD();
+    hookEvents();
+    console.log(`[Ellinia Tracker v${EXT_VERSION}] Initialized`);
+});

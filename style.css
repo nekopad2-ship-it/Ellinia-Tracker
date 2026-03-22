@@ -1,0 +1,644 @@
+/* ═══════════════════════════════════════════════════════════════════
+   ELLINIA TRACKER — style.css
+   Aesthetic: dark tactical system overlay / in-world Summoned One HUD
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+    --el-bg:          rgba(4, 10, 22, 0.95);
+    --el-bg-section:  rgba(12, 26, 48, 0.80);
+    --el-bg-header:   rgba(6, 14, 30, 0.99);
+    --el-border:      rgba(70, 150, 240, 0.18);
+    --el-border-hi:   rgba(100, 200, 255, 0.45);
+    --el-text:        #b8d8f8;
+    --el-text-dim:    #506880;
+    --el-accent:      #60c8ff;
+    --el-accent-glow: rgba(60, 160, 255, 0.35);
+    --el-hp:          #e05050;
+    --el-hp-crit:     #ff2020;
+    --el-mp:          #4878e0;
+    --el-xp:          #40a8d8;
+    --el-gold:        #e8c840;
+    --el-ts:          #90e0ff;
+    --el-width:       310px;
+    --el-font:        'Courier New', 'Consolas', monospace;
+    --el-radius:      4px;
+}
+
+/* ─── HUD CONTAINER ──────────────────────────────────────────────── */
+
+#el-hud {
+    position:     fixed;
+    top:          80px;
+    right:        20px;
+    width:        var(--el-width);
+    max-height:   88vh;
+    display:      flex;
+    flex-direction: column;
+    background:   var(--el-bg);
+    border:       1px solid var(--el-border-hi);
+    border-radius: var(--el-radius);
+    box-shadow:   0 0 0 1px rgba(0,0,0,0.4),
+                  0 0 24px rgba(50, 140, 255, 0.15),
+                  0 8px 40px rgba(0, 0, 0, 0.7);
+    font-family:  var(--el-font);
+    font-size:    11px;
+    color:        var(--el-text);
+    z-index:      9500;
+    overflow:     hidden;
+}
+
+/* Scanline texture overlay */
+#el-hud::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.06) 2px,
+        rgba(0, 0, 0, 0.06) 4px
+    );
+    pointer-events: none;
+    z-index: 0;
+    border-radius: var(--el-radius);
+}
+
+#el-hud > * { position: relative; z-index: 1; }
+
+/* ─── HEADER ──────────────────────────────────────────────────────── */
+
+.el-hud-header {
+    display:        flex;
+    align-items:    center;
+    justify-content: space-between;
+    padding:        8px 12px 7px;
+    background:     var(--el-bg-header);
+    border-bottom:  1px solid var(--el-border-hi);
+    cursor:         move;
+    user-select:    none;
+    flex-shrink:    0;
+}
+
+.el-hud-title {
+    display:     flex;
+    align-items: baseline;
+    gap:         6px;
+    font-size:   12px;
+    font-weight: bold;
+    letter-spacing: 3px;
+    color:       var(--el-accent);
+    text-shadow: 0 0 10px var(--el-accent-glow);
+}
+
+.el-hud-glyph {
+    font-size:   14px;
+    animation:   el-pulse 3s ease-in-out infinite;
+}
+
+@keyframes el-pulse {
+    0%, 100% { opacity: 1; text-shadow: 0 0 8px var(--el-accent); }
+    50%       { opacity: 0.6; text-shadow: 0 0 2px var(--el-accent); }
+}
+
+.el-hud-sub {
+    font-size:      8px;
+    letter-spacing: 2px;
+    color:          var(--el-text-dim);
+    font-weight:    normal;
+}
+
+.el-hud-controls { display: flex; gap: 5px; }
+
+.el-icon-btn {
+    width:       22px;
+    height:      22px;
+    padding:     0;
+    background:  rgba(60, 140, 220, 0.08);
+    border:      1px solid var(--el-border);
+    border-radius: 3px;
+    color:       var(--el-accent);
+    font-size:   13px;
+    cursor:      pointer;
+    display:     flex;
+    align-items: center;
+    justify-content: center;
+    transition:  background 0.2s, border-color 0.2s, color 0.2s;
+    line-height: 1;
+}
+
+.el-icon-btn:hover { background: rgba(60, 160, 255, 0.18); border-color: var(--el-accent); color: #fff; }
+
+.el-icon-btn.spinning {
+    animation: el-spin 0.8s linear infinite;
+    color: #fff;
+    border-color: var(--el-accent);
+}
+
+@keyframes el-spin { to { transform: rotate(360deg); } }
+
+/* ─── BODY / TABS ─────────────────────────────────────────────────── */
+
+.el-hud-body {
+    display:        flex;
+    flex-direction: column;
+    flex:           1;
+    overflow:       hidden;
+    min-height:     0;
+}
+
+.el-tabs {
+    display:        flex;
+    border-bottom:  1px solid var(--el-border);
+    flex-shrink:    0;
+    background:     rgba(0,0,0,0.2);
+}
+
+.el-tab-btn {
+    flex:           1;
+    padding:        6px 0 5px;
+    background:     none;
+    border:         none;
+    border-bottom:  2px solid transparent;
+    color:          var(--el-text-dim);
+    font-family:    var(--el-font);
+    font-size:      9px;
+    letter-spacing: 1.5px;
+    cursor:         pointer;
+    transition:     color 0.2s, border-color 0.2s;
+}
+
+.el-tab-btn:hover  { color: var(--el-text); }
+.el-tab-btn.active { color: var(--el-accent); border-bottom-color: var(--el-accent); }
+
+.el-tab-pane {
+    flex:       1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+}
+
+.el-tab-pane.hidden { display: none; }
+
+.el-scroll { padding: 10px 10px 20px; }
+
+/* Scrollbar */
+.el-tab-pane::-webkit-scrollbar       { width: 3px; }
+.el-tab-pane::-webkit-scrollbar-track { background: transparent; }
+.el-tab-pane::-webkit-scrollbar-thumb { background: var(--el-border); border-radius: 2px; }
+
+/* ─── IDENTITY BLOCK ─────────────────────────────────────────────── */
+
+.el-identity {
+    padding:       9px 10px 8px;
+    background:    var(--el-bg-section);
+    border:        1px solid var(--el-border-hi);
+    border-radius: var(--el-radius);
+    margin-bottom: 7px;
+}
+
+.el-ident-name {
+    font-size:      15px;
+    font-weight:    bold;
+    letter-spacing: 2px;
+    color:          var(--el-accent);
+    text-shadow:    0 0 8px rgba(60, 180, 255, 0.4);
+    margin-bottom:  4px;
+}
+
+.el-ident-sub, .el-ident-sub2 {
+    display:     flex;
+    align-items: center;
+    gap:         8px;
+    font-size:   10px;
+    margin-top:  2px;
+    flex-wrap:   wrap;
+}
+
+.el-adv      { color: var(--el-text-dim); }
+.el-abo      { color: #a8c8e8; font-size: 9px; }
+.el-abo-active { font-size: 9px; letter-spacing: 1px; margin-left: 3px; }
+.el-total-lv { margin-left: auto; color: var(--el-accent); font-size: 10px; letter-spacing: 1px; }
+
+/* ─── BADGES ─────────────────────────────────────────────────────── */
+
+.el-badge {
+    display:        inline-block;
+    padding:        1px 4px;
+    border:         1px solid;
+    border-radius:  2px;
+    font-size:      8px;
+    font-weight:    bold;
+    letter-spacing: 1px;
+    vertical-align: middle;
+    margin:         0 1px;
+}
+
+/* ─── SECTIONS ───────────────────────────────────────────────────── */
+
+.el-section {
+    margin-bottom: 6px;
+    padding:       8px;
+    background:    var(--el-bg-section);
+    border:        1px solid var(--el-border);
+    border-radius: var(--el-radius);
+}
+
+.el-sec-title {
+    font-size:      8px;
+    letter-spacing: 2px;
+    color:          var(--el-text-dim);
+    margin-bottom:  6px;
+    padding-bottom: 4px;
+    border-bottom:  1px solid var(--el-border);
+    display:        flex;
+    align-items:    center;
+    gap:            6px;
+}
+
+.el-cap-note { font-size: 7px; color: rgba(100,140,180,0.5); margin-left: auto; }
+
+.el-toggle { cursor: pointer; user-select: none; }
+.el-toggle:hover { color: var(--el-text); }
+.el-arrow  { font-size: 7px; margin-left: auto; }
+
+.el-collapse-body { }
+.el-collapse-body.collapsed { display: none; }
+
+/* ─── BARS ────────────────────────────────────────────────────────── */
+
+.el-bar-row {
+    display:       flex;
+    align-items:   center;
+    gap:           6px;
+    margin-bottom: 4px;
+}
+
+.el-bar-label {
+    width:      20px;
+    font-size:  9px;
+    color:      var(--el-text-dim);
+    flex-shrink: 0;
+    letter-spacing: 0.5px;
+}
+
+.el-bar-track {
+    flex:        1;
+    height:      9px;
+    background:  rgba(255,255,255,0.05);
+    border:      1px solid rgba(255,255,255,0.06);
+    border-radius: 5px;
+    overflow:    hidden;
+}
+
+.el-bar-track.slim { height: 5px; }
+
+.el-bar-fill {
+    height:      100%;
+    border-radius: 5px;
+    transition:  width 0.5s ease;
+}
+
+.el-bar-fill.el-hp   { background: linear-gradient(90deg, #b03030, var(--el-hp)); box-shadow: 0 0 5px rgba(220,60,60,0.4); }
+.el-bar-fill.el-hp.critical { background: var(--el-hp-crit); animation: el-crit-pulse 0.8s ease-in-out infinite; }
+.el-bar-fill.el-mp   { background: linear-gradient(90deg, #2848b0, var(--el-mp)); box-shadow: 0 0 5px rgba(70,120,220,0.4); }
+.el-bar-fill.el-xp   { background: linear-gradient(90deg, #2878a0, var(--el-xp)); }
+
+@keyframes el-crit-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+}
+
+.el-bar-val { font-size: 9px; color: var(--el-text-dim); width: 52px; text-align: right; flex-shrink: 0; }
+
+/* ─── THREAD SIGHT ───────────────────────────────────────────────── */
+
+.el-ts-section { border-color: rgba(140, 220, 255, 0.25); }
+.el-ts-section .el-sec-title { color: var(--el-ts); }
+
+.el-ts-row {
+    display:     flex;
+    align-items: center;
+    gap:         6px;
+}
+
+.el-ts-pip {
+    width:         11px;
+    height:        11px;
+    border-radius: 50%;
+    border:        1px solid rgba(140,220,255,0.2);
+    background:    rgba(140,220,255,0.04);
+    transition:    background 0.4s, box-shadow 0.4s, border-color 0.4s;
+    flex-shrink:   0;
+}
+
+.el-ts-pip.active {
+    background:   rgba(140,220,255,0.35);
+    border-color: var(--el-ts);
+    box-shadow:   0 0 7px rgba(140,220,255,0.6);
+}
+
+.el-ts-desc { font-size: 9px; color: var(--el-ts); margin-left: 2px; opacity: 0.85; }
+
+/* ─── STATS GRID ─────────────────────────────────────────────────── */
+
+.el-stats-grid {
+    display:               grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap:                   4px;
+}
+
+.el-stat {
+    display:        flex;
+    flex-direction: column;
+    gap:            3px;
+    padding:        5px 6px 4px;
+    background:     rgba(0,0,0,0.2);
+    border:         1px solid var(--el-border);
+    border-radius:  3px;
+    transition:     border-color 0.3s;
+}
+
+.el-stat.overcap {
+    border-color: rgba(240, 200, 60, 0.35);
+}
+
+.el-stat-name { font-size: 8px; color: var(--el-text-dim); letter-spacing: 1px; }
+
+.el-stat-track {
+    height:        3px;
+    background:    rgba(255,255,255,0.06);
+    border-radius: 2px;
+    overflow:      hidden;
+}
+
+.el-stat-fill {
+    height:        100%;
+    background:    linear-gradient(90deg, #3060c0, #50b0e8);
+    border-radius: 2px;
+    transition:    width 0.4s ease;
+}
+
+.el-stat.overcap .el-stat-fill { background: linear-gradient(90deg, #c08020, #f0d040); }
+
+.el-stat-val {
+    font-size:   12px;
+    font-weight: bold;
+    color:       var(--el-text);
+    line-height: 1;
+}
+
+.el-stat.overcap .el-stat-val { color: var(--el-gold); }
+
+/* ─── DISCIPLINES ────────────────────────────────────────────────── */
+
+.el-disc-row {
+    display:       flex;
+    align-items:   center;
+    gap:           7px;
+    margin-bottom: 4px;
+}
+
+.el-disc-name  { width: 62px; font-size: 9px; color: var(--el-text-dim); flex-shrink: 0; letter-spacing: 0.3px; }
+.el-disc-lvl   { width: 32px; text-align: right; font-size: 9px; color: var(--el-accent); flex-shrink: 0; }
+
+/* ─── SKILLS ─────────────────────────────────────────────────────── */
+
+.el-skill-row {
+    display:       flex;
+    flex-wrap:     wrap;
+    align-items:   baseline;
+    gap:           4px;
+    padding:       5px 0;
+    border-bottom: 1px solid var(--el-border);
+}
+
+.el-skill-row:last-child { border-bottom: none; padding-bottom: 0; }
+
+.el-skill-lv   { font-size: 9px; color: var(--el-text-dim); }
+.el-skill-name { flex: 1; color: var(--el-text); min-width: 80px; font-size: 10px; }
+.el-skill-desc { width: 100%; font-size: 9px; color: var(--el-text-dim); line-height: 1.5; opacity: 0.85; }
+
+/* ─── EQUIPMENT ──────────────────────────────────────────────────── */
+
+.el-equip-grid {
+    display:               grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap:                   4px;
+}
+
+.el-equip-slot {
+    padding:       5px 7px;
+    background:    rgba(0,0,0,0.18);
+    border:        1px solid var(--el-border);
+    border-radius: 3px;
+    transition:    border-color 0.3s;
+}
+
+.el-equip-slot.filled { border-color: rgba(80, 160, 240, 0.3); }
+
+.el-slot-label  { display: block; font-size: 7px; color: var(--el-text-dim); letter-spacing: 1px; margin-bottom: 2px; }
+.el-slot-item   { font-size: 9px; color: var(--el-text); }
+.el-slot-empty  { font-size: 9px; color: rgba(80,100,120,0.6); }
+.el-runes       { color: var(--el-gold); font-size: 8px; }
+
+/* ─── INVENTORY ──────────────────────────────────────────────────── */
+
+.el-inv-row {
+    display:       flex;
+    align-items:   center;
+    gap:           5px;
+    margin-bottom: 3px;
+}
+
+.el-inv-name { flex: 1; color: var(--el-text); font-size: 10px; }
+.el-inv-qty  { color: var(--el-text-dim); font-size: 9px; flex-shrink: 0; }
+.el-mesos    { color: var(--el-gold); font-size: 9px; margin-left: auto; letter-spacing: 0.5px; }
+
+/* ─── STATUS EFFECTS ─────────────────────────────────────────────── */
+
+.el-status-section { border-color: rgba(200,60,60,0.25); }
+
+.el-status-row {
+    display:       flex;
+    align-items:   flex-start;
+    flex-wrap:     wrap;
+    gap:           5px;
+    margin-bottom: 4px;
+    padding:       4px 6px;
+    background:    rgba(200,40,40,0.07);
+    border-left:   2px solid #c04040;
+    border-radius: 0 3px 3px 0;
+}
+
+.el-status-name { color: #ff7070; font-size: 10px; font-weight: bold; flex: 1; min-width: 80px; }
+.el-status-dur  { color: var(--el-text-dim); font-size: 9px; }
+.el-status-desc { width: 100%; color: var(--el-text-dim); font-size: 9px; line-height: 1.4; }
+
+/* ─── NOTES ──────────────────────────────────────────────────────── */
+
+.el-notes {
+    font-size:   9px;
+    color:       var(--el-text-dim);
+    line-height: 1.5;
+    font-style:  italic;
+}
+
+/* ─── NPC TAB ────────────────────────────────────────────────────── */
+
+.el-npc-toolbar {
+    display:       flex;
+    align-items:   center;
+    gap:           6px;
+    margin-bottom: 8px;
+}
+
+.el-select {
+    flex:       1;
+    background: rgba(0,0,0,0.35);
+    border:     1px solid var(--el-border);
+    color:      var(--el-text);
+    padding:    4px 6px;
+    border-radius: 3px;
+    font-family: var(--el-font);
+    font-size:  9px;
+    outline:    none;
+}
+
+.el-select:focus { border-color: var(--el-accent); }
+
+.el-npc-card {
+    margin-bottom: 6px;
+    border:        1px solid var(--el-border);
+    border-radius: var(--el-radius);
+    overflow:      hidden;
+}
+
+.el-npc-header {
+    display:     flex;
+    align-items: center;
+    gap:         7px;
+    padding:     7px 10px;
+    background:  var(--el-bg-section);
+    border-bottom: 1px solid var(--el-border);
+    cursor:      pointer;
+}
+
+.el-npc-name { font-weight: bold; color: var(--el-accent); flex: 1; font-size: 11px; letter-spacing: 1px; }
+.el-npc-meta { font-size: 9px; color: var(--el-text-dim); }
+
+.el-npc-body { padding: 8px; }
+
+/* ─── SETTINGS ───────────────────────────────────────────────────── */
+
+.el-settings-group {
+    margin-bottom: 10px;
+    padding:       8px;
+    background:    var(--el-bg-section);
+    border:        1px solid var(--el-border);
+    border-radius: var(--el-radius);
+}
+
+.el-settings-title {
+    font-size:      8px;
+    letter-spacing: 2px;
+    color:          var(--el-text-dim);
+    margin-bottom:  8px;
+    padding-bottom: 4px;
+    border-bottom:  1px solid var(--el-border);
+}
+
+.el-label {
+    display:        flex;
+    flex-direction: column;
+    gap:            3px;
+    margin-bottom:  7px;
+    font-size:      9px;
+    color:          var(--el-text-dim);
+    letter-spacing: 0.3px;
+}
+
+.el-label-inline {
+    display:     flex;
+    align-items: center;
+    gap:         6px;
+    margin-bottom: 7px;
+    font-size:   9px;
+    color:       var(--el-text-dim);
+}
+
+.el-input {
+    background:    rgba(0,0,0,0.35);
+    border:        1px solid var(--el-border);
+    color:         var(--el-text);
+    padding:       4px 7px;
+    border-radius: 3px;
+    font-family:   var(--el-font);
+    font-size:     10px;
+    outline:       none;
+    transition:    border-color 0.2s;
+    width:         100%;
+    box-sizing:    border-box;
+}
+
+.el-input:focus { border-color: var(--el-accent); }
+
+.el-danger-group { border-color: rgba(200,60,60,0.3); }
+
+/* ─── BUTTONS ────────────────────────────────────────────────────── */
+
+.el-btn {
+    padding:       5px 11px;
+    background:    rgba(40,90,160,0.18);
+    border:        1px solid var(--el-border);
+    color:         var(--el-text);
+    border-radius: 3px;
+    font-family:   var(--el-font);
+    font-size:     9px;
+    letter-spacing: 1px;
+    cursor:        pointer;
+    transition:    background 0.2s, border-color 0.2s, color 0.2s;
+    white-space:   nowrap;
+}
+
+.el-btn:hover  { background: rgba(50,120,200,0.30); border-color: var(--el-accent); }
+.el-btn.small  { padding: 3px 8px; font-size: 8px; }
+.el-btn.tiny   { padding: 2px 5px; font-size: 8px; background: none; border: none; color: var(--el-text-dim); }
+.el-btn.tiny:hover  { color: #e05050; }
+.el-btn.danger { background: rgba(160,30,30,0.18); border-color: rgba(200,60,60,0.35); color: #f07070; }
+.el-btn.danger:hover { background: rgba(200,40,40,0.28); }
+
+/* ─── MISC ───────────────────────────────────────────────────────── */
+
+.el-empty {
+    color:      var(--el-text-dim);
+    font-size:  9px;
+    text-align: center;
+    padding:    8px 0;
+    opacity:    0.7;
+}
+
+/* ─── NOTIFICATION TOAST ─────────────────────────────────────────── */
+
+.el-notif {
+    position:      fixed;
+    bottom:        24px;
+    right:         24px;
+    background:    rgba(6, 16, 36, 0.97);
+    border:        1px solid var(--el-accent);
+    color:         var(--el-accent);
+    padding:       8px 14px;
+    border-radius: var(--el-radius);
+    font-family:   var(--el-font);
+    font-size:     10px;
+    letter-spacing: 1px;
+    z-index:       9999;
+    opacity:       0;
+    transform:     translateY(8px);
+    transition:    opacity 0.25s ease, transform 0.25s ease;
+    box-shadow:    0 0 16px rgba(60,160,255,0.2), 0 4px 20px rgba(0,0,0,0.5);
+    pointer-events: none;
+}
+
+.el-notif.visible  { opacity: 1; transform: translateY(0); }
+.el-notif.error    { border-color: #e05050; color: #ff8080; box-shadow: 0 0 16px rgba(200,50,50,0.25); }
