@@ -20,7 +20,7 @@
     --el-mp:       #4878e0;
     --el-xp:       #c87020;
     --el-gold:     #e8c840;
-    --el-ts:       #7eb8d4;
+    --el-ts:       var(--el-gold);
 }
 
 /* ─── DESKTOP SIDEBAR ─────────────────────────────────────────────
@@ -291,9 +291,9 @@
 
 .el-ts-row { display: flex; align-items: center; gap: 0.5em; }
 
-.el-ts-pip { width: clamp(14px, 2vw, 18px); height: clamp(14px, 2vw, 18px); border-radius: 50%; border: 2px solid rgba(255,255,255,0.25); background: transparent; transition: all 0.25s ease; flex-shrink: 0; }
+.el-ts-pip { width: clamp(14px, 2vw, 18px); height: clamp(14px, 2vw, 18px); border-radius: 50%; border: 2px solid rgba(212,170,92,0.3); background: transparent; transition: all 0.25s ease; flex-shrink: 0; }
 
-.el-ts-pip.active { background: #fff; border-color: #fff; box-shadow: 0 0 6px rgba(255,255,255,0.6); }
+.el-ts-pip.active { background: radial-gradient(circle, #fff8e0 0%, #d4aa5c 60%); border-color: #d4aa5c; box-shadow: 0 0 8px #d4aa5c, 0 0 3px #fff8e0; }
 
 .el-ts-desc { font-size: clamp(0.75rem, 0.9vw, 0.9rem); color: var(--el-ts); }
 
