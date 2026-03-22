@@ -872,30 +872,22 @@ function bindTabs(hud) {
     });
 }
 
-// ─── DRAG ─────────────────────────────────────────────────────────────────────
+// ─── ORB (MOBILE TRIGGER) ─────────────────────────────────────────────────────
 
-function makeDraggable(hud) {
-    const handle = hud.querySelector('.el-hud-header');
-    if (!handle) return;
-    let dragging = false, ox = 0, oy = 0;
+function createOrb() {
+    if (document.getElementById('el-orb')) return;
+    const orb = document.createElement('div');
+    orb.id          = 'el-orb';
+    orb.textContent = '◈';
+    orb.title       = 'Ellinia Tracker';
+    orb.addEventListener('click', () => toggleMobilePanel());
+    document.body.appendChild(orb);
+}
 
-    handle.addEventListener('mousedown', (e) => {
-        if (e.target.tagName === 'BUTTON') return;
-        dragging = true;
-        const r = hud.getBoundingClientRect();
-        ox = e.clientX - r.left;
-        oy = e.clientY - r.top;
-        hud.style.userSelect = 'none';
-    });
-
-    document.addEventListener('mousemove', (e) => {
-        if (!dragging) return;
-        hud.style.left  = `${Math.max(0, e.clientX - ox)}px`;
-        hud.style.top   = `${Math.max(0, e.clientY - oy)}px`;
-        hud.style.right = 'auto';
-    });
-
-    document.addEventListener('mouseup', () => { dragging = false; hud.style.userSelect = ''; });
+function toggleMobilePanel() {
+    const hud = document.getElementById('el-hud');
+    if (!hud) return;
+    hud.classList.toggle('el-mobile-open');
 }
 
 // ─── HUD CREATION ─────────────────────────────────────────────────────────────
@@ -914,7 +906,8 @@ function createHUD() {
             </div>
             <div class="el-hud-controls">
                 <button class="el-icon-btn" id="el-parse-btn" title="Parse last messages">⟳</button>
-                <button class="el-icon-btn" id="el-minimize-btn" title="Minimize">−</button>
+                <button class="el-icon-btn" id="el-minimize-btn" title="Collapse sidebar">−</button>
+                <button class="el-icon-btn el-mobile-close" id="el-close-btn" title="Close">✕</button>
             </div>
         </div>
         <div class="el-hud-body" id="el-hud-body">
@@ -928,23 +921,23 @@ function createHUD() {
             <div class="el-tab-pane el-scroll hidden" id="el-tab-settings"></div>
         </div>`;
 
-    const { top, right } = settings.hudPosition || { top: 80, right: 20 };
-    hud.style.top   = `${top}px`;
-    hud.style.right = `${right}px`;
-
     document.body.appendChild(hud);
 
-    // Minimize
+    // Desktop collapse (slide sidebar off-screen)
     hud.querySelector('#el-minimize-btn').addEventListener('click', () => {
-        const body  = hud.querySelector('#el-hud-body');
-        const minimized = body.classList.toggle('hidden');
-        hud.querySelector('#el-minimize-btn').textContent = minimized ? '+' : '−';
+        const collapsed = hud.classList.toggle('el-collapsed');
+        hud.querySelector('#el-minimize-btn').textContent = collapsed ? '+' : '−';
+    });
+
+    // Mobile close button
+    hud.querySelector('#el-close-btn')?.addEventListener('click', () => {
+        hud.classList.remove('el-mobile-open');
     });
 
     // Parse
     hud.querySelector('#el-parse-btn').addEventListener('click', parseLastMessages);
 
-    makeDraggable(hud);
+    createOrb();
     bindTabs(hud);
     renderHUD();
 }
