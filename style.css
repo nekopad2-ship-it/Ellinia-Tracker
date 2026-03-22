@@ -319,9 +319,46 @@
 
 /* ─── DISCIPLINES ────────────────────────────────────────────────── */
 
-.el-disc-row { display: flex; align-items: center; gap: 0.5em; margin-bottom: 0.375em; }
+.el-disc-card {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    background: color-mix(in srgb, var(--el-gold) 6%, var(--el-accent));
+    border: 1px solid color-mix(in srgb, var(--el-gold) 25%, transparent);
+    border-left: 3px solid var(--el-gold);
+    border-radius: 0.375em;
+    padding: 0.45em 0.6em;
+    margin-bottom: 0.35em;
+}
 
-.el-disc-name { width: 5.5em; font-size: clamp(0.75rem, 0.9vw, 0.9rem); color: var(--el-text-dim); flex-shrink: 0; font-weight: 500; }
+.el-disc-icon {
+    width:  clamp(28px, 3.5vw, 34px);
+    height: clamp(28px, 3.5vw, 34px);
+    flex-shrink: 0;
+    background: color-mix(in srgb, var(--el-gold) 15%, var(--el-accent));
+    border: 1px solid color-mix(in srgb, var(--el-gold) 35%, transparent);
+    border-radius: 0.25em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(0.85rem, 1.1vw, 1.1rem);
+    color: var(--el-gold);
+}
+
+.el-disc-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2em;
+}
+
+.el-disc-label {
+    font-size: clamp(0.78rem, 0.92vw, 0.92rem);
+    font-weight: 600;
+    color: var(--el-text);
+    letter-spacing: 0.02em;
+}
 .el-disc-lvl  { width: 3em; text-align: right; font-size: clamp(0.75rem, 0.9vw, 0.9rem); color: var(--el-hi); flex-shrink: 0; font-weight: 600; }
 
 /* ─── SKILLS ─────────────────────────────────────────────────────── */
@@ -536,7 +573,7 @@
     opacity: 0; transition: opacity 0.15s, color 0.15s;
 }
 .el-sk-card:hover        .el-rm-btn,
-.el-inv-edit-row:hover   .el-rm-btn,
+.el-inv-card:hover       .el-rm-btn,
 .el-status-row:hover     .el-rm-btn,
 .el-equip-slot:hover     .el-rm-btn { opacity: 1; }
 .el-rm-btn:hover { color: #e05050; }
@@ -674,11 +711,43 @@
 
 /* ─── INVENTORY EDIT ROW ────────────────────────────────────────── */
 
-.el-inv-edit-row {
-    display: flex; align-items: center; gap: 0.3em;
-    padding: 0.3em 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+.el-inv-card {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    background: color-mix(in srgb, var(--tc, #9d9d9d) 6%, var(--el-accent));
+    border: 1px solid color-mix(in srgb, var(--tc, #9d9d9d) 30%, transparent);
+    border-left: 3px solid var(--tc, #9d9d9d);
+    border-radius: 0.375em;
+    padding: 0.4em 0.5em;
+    margin-bottom: 0.3em;
+    transition: background 0.15s;
 }
-.el-inv-edit-row .el-inv-name { flex: 1; min-width: 3em; font-weight: 600; }
+
+.el-inv-tier-badge {
+    background: color-mix(in srgb, var(--tc, #9d9d9d) 15%, var(--el-accent));
+    border: 1px solid;
+    border-radius: 0.25em;
+    font-size: clamp(0.65rem, 0.78vw, 0.78rem);
+    font-weight: 800;
+    padding: 0.1em 0.25em;
+    cursor: pointer;
+    outline: none;
+    flex-shrink: 0;
+    min-width: 5.5em;
+    text-align: center;
+}
+
+.el-inv-card .el-inv-name { flex: 1; min-width: 3em; font-weight: 600; font-size: clamp(0.8rem, 0.95vw, 0.9rem); }
+
+.el-inv-qty {
+    font-size: clamp(0.72rem, 0.85vw, 0.85rem);
+    font-weight: 700;
+    color: var(--el-hi);
+    min-width: 2em;
+    text-align: center;
+    flex-shrink: 0;
+}
 
 /* ─── STATUS EFFECT ROW ─────────────────────────────────────────── */
 
