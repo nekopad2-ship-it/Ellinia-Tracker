@@ -3,8 +3,8 @@
 //  Drop into: SillyTavern/public/extensions/third-party/ellinia-tracker/
 // ═══════════════════════════════════════════════════════════════════
 
-import { extension_settings, getContext } from '../../../extensions.js';
-import { saveSettingsDebounced, eventSource, event_types } from '../../../../script.js';;
+import { extension_settings } from '../../../extensions.js';
+import { saveSettingsDebounced, eventSource, event_types } from '../../../../script.js';
 
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
@@ -204,6 +204,7 @@ Return ONLY the JSON array. No markdown fences, no explanation, no preamble.`;
 
 let settings   = {};
 let isParsing  = false;
+let _abortCtrl = null;
 
 // ─── SETTINGS INIT ────────────────────────────────────────────────────────────
 
@@ -224,7 +225,6 @@ function initSettings() {
 
 function saveState() {
     extension_settings[EXT_NAME] = settings;
-    settings = extension_settings[EXT_NAME];
     saveSettingsDebounced();
 }
 
@@ -283,59 +283,96 @@ function totalLevel(char) {
 // ─── CHARACTER PANEL RENDERER ─────────────────────────────────────────────────
 
 function renderCharPanel(char) {
-    const capped = SOFT_CAPS[char.classRank] || 20;
-
-    // ── Identity block ──────────────────────────────────────────────
-    const aboColor  = STATUS_COLORS[char.aboStatus] || '#888';
-    const aboIcon   = ABO_ICONS[char.aboGender]     || '◇';
+    const capped  = SOFT_CAPS[char.classRank] || 20;
+    const charId  = char.isPlayer ? '__player__' : char.name;
+    const aboIcon = ABO_ICONS[char.aboGender] || '◇';
+    const aboColor = STATUS_COLORS[char.aboStatus] || '#888';
     const statusTag = char.aboStatus !== 'neutral'
         ? `<span class="el-abo-active" style="color:${aboColor}">[${char.aboStatus.toUpperCase()}]</span>`
         : '';
 
+    // ── Identity ──────────────────────────────────────────────────────
+    const advOptions = RANK_ORDER.filter(r => r !== 'Mythic').map(r =>
+        `<option value="${r}" ${char.adventurerRank === r ? 'selected' : ''}>${r}</option>`
+    ).join('');
+
     let html = `<div class="el-identity">
-        <div class="el-ident-name">${char.name || '—'}</div>
+        <div class="el-ident-name el-editable" data-char="${charId}" data-field="name" contenteditable="true" title="Click to edit name">${char.name || '—'}</div>
         <div class="el-ident-sub">
-            <span>${char.class || '—'} ${rankBadge(char.classRank)}</span>
-            <span class="el-adv">ADV ${rankBadge(char.adventurerRank)}</span>
+            <span class="el-editable" data-char="${charId}" data-field="class" contenteditable="true" title="Click to edit class">${char.class || '—'}</span>
+            ${rankBadge(char.classRank)}
+            <span class="el-adv">ADV <select class="el-rank-select" data-char="${charId}" data-field="adventurerRank">${advOptions}</select></span>
         </div>
         <div class="el-ident-sub2">
-            <span class="el-abo">${aboIcon} ${char.aboGender} ${statusTag}</span>
+            <span class="el-abo el-abo-cycle" data-char="${charId}" title="Click to cycle ABO status">${aboIcon} ${char.aboGender} ${statusTag}</span>
             <span class="el-total-lv">∑ Lv.${totalLevel(char)}</span>
         </div>
     </div>`;
 
-    // ── HP / MP bars ─────────────────────────────────────────────────
+    // ── HP / MP ───────────────────────────────────────────────────────
+    const hpPct = char.hp.max > 0 ? Math.min(100, Math.round((char.hp.current / char.hp.max) * 100)) : 0;
+    const mpPct = char.mana.max > 0 ? Math.min(100, Math.round((char.mana.current / char.mana.max) * 100)) : 0;
+    const hpCrit = hpPct < 25;
+
     html += `<div class="el-section">
-        ${hpBar(char.hp.current, char.hp.max)}
-        ${mpBar(char.mana.current, char.mana.max)}
+        <div class="el-bar-row">
+            <span class="el-bar-label">HP</span>
+            <div class="el-bar-track">
+                <div class="el-bar-fill el-hp${hpCrit ? ' critical' : ''}" style="width:${hpPct}%"></div>
+            </div>
+            <span class="el-bar-val">
+                <input class="el-val-input" type="number" data-char="${charId}" data-field="hp.current" value="${char.hp.current}" min="0" max="${char.hp.max}" title="Current HP"/>
+                / <input class="el-val-input" type="number" data-char="${charId}" data-field="hp.max" value="${char.hp.max}" min="1" title="Max HP"/>
+            </span>
+        </div>
+        <div class="el-bar-row">
+            <span class="el-bar-label">MP</span>
+            <div class="el-bar-track">
+                <div class="el-bar-fill el-mp" style="width:${mpPct}%"></div>
+            </div>
+            <span class="el-bar-val">
+                <input class="el-val-input" type="number" data-char="${charId}" data-field="mana.current" value="${char.mana.current}" min="0" max="${char.mana.max}" title="Current MP"/>
+                / <input class="el-val-input" type="number" data-char="${charId}" data-field="mana.max" value="${char.mana.max}" min="1" title="Max MP"/>
+            </span>
+        </div>
     </div>`;
 
     // ── Thread Sight (player only) ────────────────────────────────────
-    if (char.isPlayer && char.threadSightLevel > 0) {
-        const tsDesc = ['—', 'Common legible', 'Uncommon legible', 'Rare legible + mana read', 'Weak point detection', 'Epic legible + full HUD'][char.threadSightLevel] || '?';
+    if (char.isPlayer) {
+        const tsLevel = char.threadSightLevel || 0;
+        const tsDesc = ['—', 'Common legible', 'Uncommon legible', 'Rare legible + mana read', 'Weak point detection', 'Epic legible + full HUD'][tsLevel] || '?';
         html += `<div class="el-section el-ts-section">
             <div class="el-sec-title">◈ THREAD SIGHT</div>
             <div class="el-ts-row">
                 ${[1,2,3,4,5].map(i =>
-                    `<div class="el-ts-pip${i <= char.threadSightLevel ? ' active' : ''}" title="Level ${i}"></div>`
+                    `<div class="el-ts-pip${i <= tsLevel ? ' active' : ''}" title="Level ${i}"></div>`
                 ).join('')}
-                <span class="el-ts-desc">Lv.${char.threadSightLevel} — ${tsDesc}</span>
+                <span class="el-ts-desc">Lv.${tsLevel}</span>
+                <div class="el-pm-btns">
+                    <button class="el-pm-btn" data-char="${charId}" data-field="threadSightLevel" data-delta="-1">−</button>
+                    <button class="el-pm-btn" data-char="${charId}" data-field="threadSightLevel" data-delta="1">+</button>
+                </div>
             </div>
+            <div style="font-size:0.75rem;color:var(--el-text-dim);margin-top:0.25em">${tsDesc}</div>
         </div>`;
     }
 
-    // ── Stats grid ────────────────────────────────────────────────────
+    // ── Stats ─────────────────────────────────────────────────────────
     html += `<div class="el-section">
         <div class="el-sec-title">ATTRIBUTES <span class="el-cap-note">soft cap: ${capped}</span></div>
         <div class="el-stats-grid">
             ${STATS.map(s => {
-                const val   = char.stats?.[s] || 0;
-                const pct   = Math.min(100, Math.round((val / capped) * 100));
-                const over  = val >= capped;
+                const val  = char.stats?.[s] || 0;
+                const pct  = Math.min(100, Math.round((val / capped) * 100));
+                const over = val >= capped;
                 return `<div class="el-stat${over ? ' overcap' : ''}">
                     <span class="el-stat-name">${s}</span>
                     <div class="el-stat-track"><div class="el-stat-fill" style="width:${pct}%"></div></div>
-                    <span class="el-stat-val">${val}</span>
+                    <div class="el-stat-edit-row">
+                        <button class="el-pm-btn" data-char="${charId}" data-field="stats.${s}" data-delta="-1">−</button>
+                        <span class="el-stat-val">${val}</span>
+                        <button class="el-pm-btn" data-char="${charId}" data-field="stats.${s}" data-delta="1">+</button>
+                    </div>
                 </div>`;
             }).join('')}
         </div>
@@ -344,12 +381,25 @@ function renderCharPanel(char) {
     // ── Disciplines ────────────────────────────────────────────────────
     html += `<div class="el-section">
         <div class="el-sec-title">DISCIPLINES</div>
-        ${DISCIPLINES.map(d => discBar(d, char.disciplines?.[d] || { xp: 0, level: 1 })).join('')}
+        ${DISCIPLINES.map(d => {
+            const data  = char.disciplines?.[d] || { xp: 0, level: 1 };
+            const toNext = Math.max(1, Math.round(100 * Math.pow(data.level, 1.5)));
+            const pct   = Math.min(100, Math.round(((data.xp % toNext) / toNext) * 100));
+            return `<div class="el-disc-row">
+                <span class="el-disc-name">${d}</span>
+                <div class="el-bar-track slim"><div class="el-bar-fill el-xp" style="width:${pct}%"></div></div>
+                <div class="el-pm-btns">
+                    <button class="el-pm-btn small" data-char="${charId}" data-field="disc.${d}" data-delta="-1">−</button>
+                    <span class="el-disc-lvl">Lv.${data.level}</span>
+                    <button class="el-pm-btn small" data-char="${charId}" data-field="disc.${d}" data-delta="1">+</button>
+                </div>
+            </div>`;
+        }).join('')}
     </div>`;
 
-    // ── Skills (collapsible) ───────────────────────────────────────────
+    // ── Skills ─────────────────────────────────────────────────────────
     if (char.skills?.length > 0) {
-        const sid = `skills-${char.name.replace(/\s+/g, '_')}`;
+        const sid = `skills-${charId.replace(/\s+/g, '_')}`;
         html += `<div class="el-section el-collapse" data-target="${sid}">
             <div class="el-sec-title el-toggle">SKILLS (${char.skills.length}) <span class="el-arrow">▼</span></div>
             <div class="el-collapse-body" id="${sid}">
@@ -363,8 +413,8 @@ function renderCharPanel(char) {
         </div>`;
     }
 
-    // ── Equipment (collapsible) ─────────────────────────────────────────
-    const eid = `equip-${char.name.replace(/\s+/g, '_')}`;
+    // ── Equipment ──────────────────────────────────────────────────────
+    const eid = `equip-${charId.replace(/\s+/g, '_')}`;
     html += `<div class="el-section el-collapse" data-target="${eid}">
         <div class="el-sec-title el-toggle">EQUIPMENT <span class="el-arrow">▼</span></div>
         <div class="el-collapse-body" id="${eid}">
@@ -382,8 +432,8 @@ function renderCharPanel(char) {
         </div>
     </div>`;
 
-    // ── Inventory + Mesos (collapsible) ─────────────────────────────────
-    const iid = `inv-${char.name.replace(/\s+/g, '_')}`;
+    // ── Inventory ──────────────────────────────────────────────────────
+    const iid = `inv-${charId.replace(/\s+/g, '_')}`;
     html += `<div class="el-section el-collapse" data-target="${iid}">
         <div class="el-sec-title el-toggle">INVENTORY <span class="el-arrow">▼</span>
             <span class="el-mesos">◎ ${(char.mesos || 0).toLocaleString()}</span>
@@ -414,14 +464,132 @@ function renderCharPanel(char) {
     }
 
     // ── Notes ──────────────────────────────────────────────────────────
-    if (char.notes) {
-        html += `<div class="el-section el-notes">${char.notes}</div>`;
-    }
+    html += `<div class="el-section">
+        <div class="el-sec-title">NOTES</div>
+        <div class="el-editable el-notes-edit" data-char="${charId}" data-field="notes" contenteditable="true" title="Click to edit notes">${char.notes || '<span style="opacity:0.4;font-style:italic">Click to add notes…</span>'}</div>
+    </div>`;
 
     return html;
 }
 
-// ─── NPC TAB RENDERER ─────────────────────────────────────────────────────────
+// ─── EDIT EVENT BINDING ───────────────────────────────────────────────────────
+
+function getCharByKey(charId) {
+    if (charId === '__player__') return settings.state.player;
+    return settings.state.npcs[charId] || null;
+}
+
+function setNestedField(char, field, value) {
+    if (field === 'hp.current')    { char.hp.current = Math.max(0, Math.min(Number(value), char.hp.max)); return; }
+    if (field === 'hp.max')        { char.hp.max = Math.max(1, Number(value)); char.hp.current = Math.min(char.hp.current, char.hp.max); return; }
+    if (field === 'mana.current')  { char.mana.current = Math.max(0, Math.min(Number(value), char.mana.max)); return; }
+    if (field === 'mana.max')      { char.mana.max = Math.max(1, Number(value)); char.mana.current = Math.min(char.mana.current, char.mana.max); return; }
+    if (field.startsWith('stats.')) { const s = field.slice(6); if (char.stats?.[s] !== undefined) char.stats[s] = Math.max(0, Number(value)); return; }
+    if (field.startsWith('disc.'))  {
+        const d = field.slice(5);
+        if (char.disciplines?.[d]) {
+            char.disciplines[d].level = Math.max(1, Number(value));
+        }
+        return;
+    }
+    if (field === 'threadSightLevel') { char.threadSightLevel = Math.max(0, Math.min(5, Number(value))); return; }
+    if (field === 'name')          { char.name = String(value).trim(); return; }
+    if (field === 'class')         { char.class = String(value).trim(); return; }
+    if (field === 'notes')         { char.notes = String(value).trim(); return; }
+    if (field === 'adventurerRank') { char.adventurerRank = String(value); return; }
+}
+
+function bindEditEvents(root) {
+    // +/- buttons
+    root.querySelectorAll('.el-pm-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const charId = btn.dataset.char;
+            const field  = btn.dataset.field;
+            const delta  = parseInt(btn.dataset.delta);
+            const char   = getCharByKey(charId);
+            if (!char) return;
+
+            if (field.startsWith('stats.')) {
+                const s = field.slice(6);
+                char.stats[s] = Math.max(0, (char.stats[s] || 0) + delta);
+            } else if (field.startsWith('disc.')) {
+                const d = field.slice(5);
+                if (char.disciplines?.[d]) {
+                    char.disciplines[d].level = Math.max(1, (char.disciplines[d].level || 1) + delta);
+                }
+            } else if (field === 'threadSightLevel') {
+                char.threadSightLevel = Math.max(0, Math.min(5, (char.threadSightLevel || 0) + delta));
+            }
+            saveState();
+            renderHUD();
+        });
+    });
+
+    // HP/MP number inputs
+    root.querySelectorAll('.el-val-input').forEach(input => {
+        const commit = () => {
+            const charId = input.dataset.char;
+            const field  = input.dataset.field;
+            const char   = getCharByKey(charId);
+            if (!char) return;
+            setNestedField(char, field, input.value);
+            saveState();
+            renderHUD();
+        };
+        input.addEventListener('change', commit);
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { commit(); e.target.blur(); } });
+    });
+
+    // Contenteditable fields (name, class, notes)
+    root.querySelectorAll('.el-editable[contenteditable]').forEach(el => {
+        el.addEventListener('blur', () => {
+            const charId = el.dataset.char;
+            const field  = el.dataset.field;
+            const char   = getCharByKey(charId);
+            if (!char) return;
+            // Clear placeholder if needed
+            const val = el.innerText.trim();
+            setNestedField(char, field, val);
+            saveState();
+            // Don't re-render on blur — it causes cursor loss
+        });
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+        });
+    });
+
+    // Adventurer Rank dropdown
+    root.querySelectorAll('.el-rank-select').forEach(sel => {
+        sel.addEventListener('change', () => {
+            const char = getCharByKey(sel.dataset.char);
+            if (!char) return;
+            char.adventurerRank = sel.value;
+            saveState();
+            renderHUD();
+        });
+    });
+
+    // ABO status cycle
+    root.querySelectorAll('.el-abo-cycle').forEach(el => {
+        el.addEventListener('click', () => {
+            const char = getCharByKey(el.dataset.char);
+            if (!char) return;
+            const cycles = {
+                Alpha: ['neutral', 'rut', 'neutral'],
+                Omega: ['neutral', 'heat', 'neutral'],
+                Beta:  ['neutral'],
+            };
+            const seq = cycles[char.aboGender] || ['neutral'];
+            const idx = seq.indexOf(char.aboStatus);
+            char.aboStatus = seq[(idx + 1) % seq.length];
+            saveState();
+            renderHUD();
+        });
+    });
+}
+
+
 
 function renderNPCTab() {
     const npcs   = settings.state.npcs;
@@ -539,12 +707,6 @@ function renderSettingsTab() {
     <div class="el-settings-group el-danger-group">
         <div class="el-settings-title">DANGER ZONE</div>
         <button class="el-btn danger" id="el-reset-all">↺ Reset All Tracked State</button>
-    </div>
-
-    <div class="el-settings-group">
-        <div class="el-settings-title">DEBUG LOG</div>
-        <div id="el-debug-log" style="font-size:0.75rem;font-family:monospace;max-height:200px;overflow-y:auto;color:var(--el-text-dim);line-height:1.6;">${_elLog.map(l => `<div class="el-log-line">${l}</div>`).join('')}</div>
-        <button class="el-btn small" onclick="document.getElementById('el-debug-log').innerHTML='';_elLog.length=0">Clear</button>
     </div>`;
 }
 
@@ -565,6 +727,7 @@ function renderHUD() {
     bindCollapsibles(hud);
     bindNPCEvents(hud);
     bindSettingsEvents(hud);
+    bindEditEvents(hud);
 }
 
 // ─── COLLAPSIBLE BINDING ──────────────────────────────────────────────────────
@@ -732,10 +895,8 @@ function findProfileById(id) {
 
 function getPresetNames() {
     try {
-        // Non-bundled extension: read preset names directly from the select element ST maintains
-        const sel = document.querySelector('#settings_preset') ?? document.querySelector('#chat_completion_preset');
-        if (!sel) return [];
-        return Array.from(sel.options).map(o => o.value).filter(v => v);
+        const pm = SillyTavern.getContext().getPresetManager?.();
+        return pm?.getPresetList?.() ?? [];
     } catch {
         return [];
     }
@@ -770,7 +931,7 @@ async function fetchSecretKey(secretKey) {
 
 // ─── DIRECT API CALL ──────────────────────────────────────────────────────────
 
-async function directGenerate({ systemPrompt, userPrompt, maxTokens = 1200, temperature = 0 }) {
+async function directGenerate({ systemPrompt, userPrompt, maxTokens = 1200, temperature = 0, signal = null }) {
     const profileId = settings.connectionProfile;
     if (!profileId) {
         showNotif('⚠ No connection profile selected in CONFIG', true);
@@ -806,15 +967,14 @@ async function directGenerate({ systemPrompt, userPrompt, maxTokens = 1200, temp
     }
 
     const model = profile.model;
-    console.log('[Ellinia Tracker] Sending to API:', { provider: profile.api, model, endpoint, systemPromptLength: systemPrompt?.length, userPromptLength: userPrompt?.length });
 
     try {
         if (info.format === 'anthropic') {
-            return await _callAnthropic({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens });
+            return await _callAnthropic({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens, signal });
         } else if (info.format === 'google') {
-            return await _callGoogle({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens });
+            return await _callGoogle({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens, signal });
         } else {
-            return await _callOpenAI({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens, provider: profile.api });
+            return await _callOpenAI({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens, provider: profile.api, signal });
         }
     } catch (err) {
         showNotif(`✗ API error: ${err.message.slice(0, 80)}`, true);
@@ -822,22 +982,24 @@ async function directGenerate({ systemPrompt, userPrompt, maxTokens = 1200, temp
     }
 }
 
-async function _callAnthropic({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens }) {
+async function _callAnthropic({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens, signal }) {
     const resp = await fetch(endpoint, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({ model, max_tokens: maxTokens, system: systemPrompt || '', messages: [{ role: 'user', content: userPrompt }], temperature }),
+        signal,
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     return data.content?.find(b => b.type === 'text')?.text ?? '';
 }
 
-async function _callGoogle({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens }) {
+async function _callGoogle({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens, signal }) {
     const fullPrompt = systemPrompt ? `${systemPrompt}\n\n---\n\n${userPrompt}` : userPrompt;
     const resp = await fetch(`${endpoint}/${model}:generateContent`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        signal,
         body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
             generationConfig: { temperature, maxOutputTokens: maxTokens },
@@ -849,7 +1011,7 @@ async function _callGoogle({ endpoint, apiKey, model, systemPrompt, userPrompt, 
     return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
-async function _callOpenAI({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens, provider }) {
+async function _callOpenAI({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens, provider, signal }) {
     const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
     if (provider === 'openrouter') { headers['HTTP-Referer'] = window.location.origin; headers['X-Title'] = 'Ellinia Tracker'; }
     const messages = [];
@@ -859,6 +1021,7 @@ async function _callOpenAI({ endpoint, apiKey, model, systemPrompt, userPrompt, 
         method:  'POST',
         headers,
         body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens }),
+        signal,
     });
     if (!resp.ok) {
         const txt = await resp.text().catch(() => '');
@@ -871,11 +1034,13 @@ async function _callOpenAI({ endpoint, apiKey, model, systemPrompt, userPrompt, 
 // ─── EXTRACTION CALL ──────────────────────────────────────────────────────────
 
 async function callExtractionAPI(messageBlock) {
+    _abortCtrl = new AbortController();
     return directGenerate({
         systemPrompt: EXTRACTION_SYSTEM,
         userPrompt:   `Extract stat changes from these roleplay messages:\n\n${messageBlock}`,
         maxTokens:    1200,
         temperature:  0,
+        signal:       _abortCtrl.signal,
     });
 }
 
@@ -979,21 +1144,6 @@ function applyUpdates(char, updates) {
     }
 }
 
-// ─── IN-APP DEBUG LOG ─────────────────────────────────────────────────────────
-
-const _elLog = [];
-const MAX_LOG = 50;
-
-function elLog(msg) {
-    const ts = new Date().toLocaleTimeString();
-    _elLog.unshift(`[${ts}] ${msg}`);
-    if (_elLog.length > MAX_LOG) _elLog.pop();
-    // Update whenever the element is present (CONFIG tab may not be active)
-    const el = document.getElementById('el-debug-log');
-    if (el) el.innerHTML = _elLog.map(l => `<div class="el-log-line">${l}</div>`).join('');
-    console.debug('[EL]', msg);
-}
-
 // ─── PARSE TRIGGER ────────────────────────────────────────────────────────────
 
 async function parseLastMessages() {
@@ -1015,8 +1165,6 @@ async function parseLastMessages() {
         if (msgs.length === 0) { showNotif('No messages to parse'); return; }
 
         const raw = await callExtractionAPI(msgs.join('\n\n'));
-        console.log('[Ellinia Tracker] Raw response:', raw);
-        elLog(`Raw: ${raw ? raw.slice(0, 150) : 'null'}`);
         if (!raw) return;
 
         let updates;
@@ -1035,25 +1183,13 @@ async function parseLastMessages() {
 
         let changed = 0;
         for (const upd of updates) {
-           if (!upd.character || !upd.updates) continue;
-            const charKey = upd.character.toLowerCase().trim();
-            const playerName = (settings.state.player.name || '').toLowerCase().trim();
-            if (charKey === 'player' || charKey === playerName || charKey === '{{user}}') {
+            if (!upd.character || !upd.updates) continue;
+            if (upd.character === 'player') {
                 applyUpdates(settings.state.player, upd.updates);
                 changed++;
-                elLog(`✓ Updated player (matched as "${upd.character}")`);
-            } else {
-                // Try exact match first, then case-insensitive
-                const npcKey = Object.keys(settings.state.npcs).find(
-                    k => k.toLowerCase().trim() === charKey
-                );
-                if (npcKey) {
-                    applyUpdates(settings.state.npcs[npcKey], upd.updates);
-                    changed++;
-                    elLog(`✓ Updated NPC: ${npcKey}`);
-                } else {
-                    elLog(`⚠ No match for character: "${upd.character}"`);
-                }
+            } else if (settings.state.npcs[upd.character]) {
+                applyUpdates(settings.state.npcs[upd.character], upd.updates);
+                changed++;
             }
         }
 
@@ -1135,7 +1271,20 @@ function createHUD() {
 
     document.body.appendChild(hud);
 
-  // Create the persistent collapse tab
+    // Cancel/parse toggle
+    hud.querySelector('#el-parse-btn').addEventListener('click', () => {
+        if (isParsing) {
+            _abortCtrl?.abort();
+            isParsing = false;
+            const btn = document.getElementById('el-parse-btn');
+            if (btn) { btn.classList.remove('spinning'); btn.textContent = '⟳'; }
+            showNotif('Parse cancelled');
+        } else {
+            parseLastMessages();
+        }
+    });
+
+    // Create the persistent collapse tab
     const tab = document.createElement('div');
     tab.id = 'el-hud-tab';
     tab.textContent = '›';
@@ -1144,19 +1293,10 @@ function createHUD() {
     const toggleCollapse = () => {
         const collapsed = hud.classList.toggle('el-collapsed');
         tab.textContent = collapsed ? '‹' : '›';
-        tab.style.right = collapsed ? '0px' : 'var(--el-sidebar-w)';
     };
 
     hud.querySelector('#el-minimize-btn').addEventListener('click', toggleCollapse);
     tab.addEventListener('click', toggleCollapse);
-
-    // Mobile close button
-    hud.querySelector('#el-close-btn')?.addEventListener('click', () => {
-        hud.classList.remove('el-mobile-open');
-    });
-
-    // Parse
-    hud.querySelector('#el-parse-btn').addEventListener('click', parseLastMessages);
 
     createOrb();
     bindTabs(hud);
