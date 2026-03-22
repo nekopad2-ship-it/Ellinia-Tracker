@@ -350,13 +350,13 @@ function renderCharPanel(char) {
         avatarBlock = `<div class="el-avatar-row">
             <div class="el-avatar-wrap" title="${userName}">
                 ${userAvatar
-                    ? `<img class="el-avatar" src="${userAvatar}" alt="user" onerror="this.outerHTML='<div class=\\"el-avatar el-avatar-placeholder\\">U</div>'"/>`
+                    ? `<img class="el-avatar" src="${userAvatar}" alt="user" onerror="this.style.display='none'"/>`
                     : `<div class="el-avatar el-avatar-placeholder">U</div>`}
                 <span class="el-avatar-label">${userName}</span>
             </div>
             <div class="el-avatar-wrap" title="${charName}">
                 ${charAvatar
-                    ? `<img class="el-avatar" src="${charAvatar}" alt="char" onerror="this.outerHTML='<div class=\\"el-avatar el-avatar-placeholder\\">C</div>'"/>`
+                    ? `<img class="el-avatar" src="${charAvatar}" alt="char" onerror="this.style.display='none'"/>`
                     : `<div class="el-avatar el-avatar-placeholder">C</div>`}
                 <span class="el-avatar-label">${charName}</span>
             </div>
