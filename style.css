@@ -88,10 +88,8 @@
 /* ─── MOBILE ORB ─────────────────────────────────────────────────── */
 
 #el-orb {
-    display:         none;
+    display:         none; /* JS sets display:flex directly, bypassing media query issues */
     position:        fixed;
-    left:            16px;
-    bottom:          100px;
     width:           56px;
     height:          56px;
     border-radius:   50%;
@@ -120,7 +118,6 @@
 /* ─── MOBILE ─────────────────────────────────────────────────────── */
 
 @media (max-width: 1000px) {
-    #el-orb { display: flex; }
     #el-hud-tab { display: none; }
 
     #el-hud {
