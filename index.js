@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { extension_settings } from '../../../extensions.js';
-import { saveSettingsDebounced, eventSource, event_types, user_avatar, getThumbnailUrl, characters, this_chid } from '../../../../script.js';
+import { saveSettingsDebounced, eventSource, event_types, user_avatar, getThumbnailUrl, characters, this_chid, chat_metadata, saveChatDebounced } from '../../../../script.js';
 
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
@@ -211,21 +211,41 @@ let _abortCtrl = null;
 function initSettings() {
     if (!extension_settings[EXT_NAME]) {
         extension_settings[EXT_NAME] = structuredClone(DEFAULT_SETTINGS);
-        extension_settings[EXT_NAME].state.player = makeCharacter('Ken', true);
     }
     settings = extension_settings[EXT_NAME];
-    // Patch any missing keys from defaults
+    // Patch missing config keys
     for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
-        if (settings[k] === undefined) settings[k] = structuredClone(v);
+        if (k !== 'state' && settings[k] === undefined) settings[k] = structuredClone(v);
     }
+    // State lives in chat_metadata, not extension_settings — init blank placeholder
     if (!settings.state) settings.state = { player: makeCharacter('Ken', true), npcs: {} };
-    if (!settings.state.player) settings.state.player = makeCharacter('Ken', true);
-    if (!settings.state.npcs)   settings.state.npcs   = {};
+}
+
+// Load per-chat state from chat_metadata (called on init + CHAT_CHANGED)
+function loadChatState() {
+    const ctx = getContext();
+    const playerName = ctx.name1 || 'Player';
+    if (chat_metadata?.ellinia_state) {
+        settings.state = chat_metadata.ellinia_state;
+        // Ensure player exists
+        if (!settings.state.player) settings.state.player = makeCharacter(playerName, true);
+        if (!settings.state.npcs)   settings.state.npcs   = {};
+        settings.state.player.isPlayer = true;
+    } else {
+        // New chat — start fresh with player named after persona
+        settings.state = { player: makeCharacter(playerName, true), npcs: {} };
+    }
 }
 
 function saveState() {
+    // Save config keys to extension_settings (global)
     extension_settings[EXT_NAME] = settings;
     saveSettingsDebounced();
+    // Save state to chat_metadata (per-chat)
+    if (chat_metadata) {
+        chat_metadata.ellinia_state = settings.state;
+        saveChatDebounced();
+    }
 }
 
 // ─── RENDER HELPERS ───────────────────────────────────────────────────────────
@@ -286,11 +306,13 @@ function totalLevel(char) {
 function getCharAvatar(char) {
     try {
         if (char.isPlayer) {
-            if (user_avatar) return getThumbnailUrl('avatar', user_avatar);
+            const ctx = getContext();
+            const av  = ctx.user_avatar || user_avatar;
+            if (av) return getThumbnailUrl('avatar', av);
             return null;
         } else {
             const name  = char.name?.toLowerCase().trim();
-            const match = characters?.find(c => c.name?.toLowerCase().trim() === name);
+            const match = (getContext().characters || characters)?.find(c => c.name?.toLowerCase().trim() === name);
             if (match?.avatar) return getThumbnailUrl('avatar', match.avatar);
             return null;
         }
@@ -299,7 +321,9 @@ function getCharAvatar(char) {
 
 function getCurrentCharAvatar() {
     try {
-        const char = characters?.[this_chid];
+        const ctx  = getContext();
+        const chid = ctx.characterId ?? this_chid;
+        const char = (ctx.characters || characters)?.[chid];
         if (char?.avatar) return getThumbnailUrl('avatar', char.avatar);
         return null;
     } catch { return null; }
@@ -321,14 +345,17 @@ function renderCharPanel(char) {
     if (char.isPlayer) {
         const userAvatar = getCharAvatar(char);
         const charAvatar = getCurrentCharAvatar();
+        const ctx        = getContext();
+        const userName   = ctx.name1 || '{{user}}';
+        const charName   = ctx.name2 || '{{char}}';
         avatarBlock = `<div class="el-avatar-row">
-            <div class="el-avatar-wrap" title="{{user}}">
+            <div class="el-avatar-wrap" title="${userName}">
                 ${userAvatar ? `<img class="el-avatar" src="${userAvatar}" alt="user"/>` : `<div class="el-avatar el-avatar-placeholder">U</div>`}
-                <span class="el-avatar-label">{{user}}</span>
+                <span class="el-avatar-label">${userName}</span>
             </div>
-            <div class="el-avatar-wrap" title="{{char}}">
+            <div class="el-avatar-wrap" title="${charName}">
                 ${charAvatar ? `<img class="el-avatar" src="${charAvatar}" alt="char"/>` : `<div class="el-avatar el-avatar-placeholder">C</div>`}
-                <span class="el-avatar-label">{{char}}</span>
+                <span class="el-avatar-label">${charName}</span>
             </div>
         </div>`;
     }
@@ -1384,8 +1411,9 @@ function hookEvents() {
         }
     });
 
-    // Re-render HUD when chat changes (new character loaded) — updates avatars + clears stale state
+    // Re-render HUD when chat changes — reload per-chat state and update avatars
     eventSource.on(event_types.CHAT_CHANGED, () => {
+        loadChatState();
         renderHUD();
     });
 
@@ -1404,6 +1432,7 @@ function hookEvents() {
 
 jQuery(async () => {
     initSettings();
+    loadChatState();
     createHUD();
     hookEvents();
     console.log(`[Ellinia Tracker v${EXT_VERSION}] Initialized`);
