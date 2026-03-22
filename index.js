@@ -4,8 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { extension_settings, getContext } from '../../../extensions.js';
-import { saveSettingsDebounced } from '../../../../script.js';
-import { eventSource, event_types } from '../../../../script.js';
+import { saveSettingsDebounced, eventSource, event_types } from '../../../../script.js';;
 
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
@@ -78,8 +77,8 @@ function makeCharacter(name = '', isPlayer = false, preset = {}) {
 }
 
 const DEFAULT_SETTINGS = {
-    connectionProfile: '',   // ST connection profile name for extraction
-    completionPreset:  '',   // ST completion preset name for extraction
+    connectionProfile: '',   // ST connection profile ID for extraction
+    completionPreset:  '',   // ST completion preset name (informational only for direct calls)
     autoUpdate:        true,
     contextMessages:   3,
     state: {
@@ -621,17 +620,17 @@ function bindNPCEvents(root) {
 // ─── SETTINGS EVENTS ─────────────────────────────────────────────────────────
 
 function bindSettingsEvents(root) {
-    // Populate profile dropdown async
     const profileSel = root.querySelector('#el-conn-profile');
     const presetSel  = root.querySelector('#el-comp-preset');
 
+    // Populate profile dropdown synchronously from connectionManager
     if (profileSel) {
-        getProfileNames().then(names => {
-            profileSel.innerHTML = '<option value="">— Select profile —</option>' +
-                names.map(n => `<option value="${n}" ${settings.connectionProfile === n ? 'selected' : ''}>${n}</option>`).join('');
-        });
+        const profiles = getConnectionProfileList();
+        profileSel.innerHTML = '<option value="">— Select profile —</option>' +
+            profiles.map(p => `<option value="${p.id}" ${settings.connectionProfile === p.id ? 'selected' : ''}>${p.name}</option>`).join('');
     }
 
+    // Populate preset dropdown
     if (presetSel) {
         const presets = getPresetNames();
         presetSel.innerHTML = '<option value="">(Use profile default)</option>' +
@@ -689,76 +688,185 @@ function showNotif(msg, isError = false) {
     setTimeout(() => { el.classList.remove('visible'); setTimeout(() => el.remove(), 350); }, 2800);
 }
 
-// ─── PROFILE HELPERS ─────────────────────────────────────────────────────────
+// ─── PROVIDER MAP (mirrors TunnelVision sidecar-retrieval.js) ────────────────
+// Maps ST's chat_completion_source values to API format, endpoint, and secret key.
 
-async function getProfileNames() {
-    try {
-        const raw = await executeSlashCommands('/profile-list');
-        // executeSlashCommands returns the pipe result as a string
-        const text = typeof raw === 'string' ? raw : raw?.pipe ?? '';
-        return JSON.parse(text.trim());
-    } catch {
-        return [];
-    }
+const PROVIDER_MAP = {
+    openai:      { format: 'openai',    endpoint: 'https://api.openai.com/v1/chat/completions',            secretKey: 'api_key_openai'      },
+    claude:      { format: 'anthropic', endpoint: 'https://api.anthropic.com/v1/messages',                 secretKey: 'api_key_claude'      },
+    openrouter:  { format: 'openai',    endpoint: 'https://openrouter.ai/api/v1/chat/completions',         secretKey: 'api_key_openrouter'  },
+    deepseek:    { format: 'openai',    endpoint: 'https://api.deepseek.com/v1/chat/completions',          secretKey: 'api_key_deepseek'    },
+    mistralai:   { format: 'openai',    endpoint: 'https://api.mistral.ai/v1/chat/completions',            secretKey: 'api_key_mistralai'   },
+    nanogpt:     { format: 'openai',    endpoint: 'https://nano-gpt.com/api/v1/chat/completions',          secretKey: 'api_key_nanogpt'     },
+    groq:        { format: 'openai',    endpoint: 'https://api.groq.com/openai/v1/chat/completions',       secretKey: 'api_key_groq'        },
+    makersuite:  { format: 'google',    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models', secretKey: 'api_key_makersuite' },
+    google:      { format: 'google',    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models', secretKey: 'api_key_makersuite' },
+    xai:         { format: 'openai',    endpoint: 'https://api.x.ai/v1/chat/completions',                 secretKey: 'api_key_xai'         },
+    custom:      { format: 'openai',    endpoint: null,                                                     secretKey: 'api_key_custom'      },
+};
+
+// ─── CONNECTION PROFILE HELPERS ───────────────────────────────────────────────
+// Reads directly from extension_settings.connectionManager.profiles — same as TunnelVision.
+
+function getConnectionProfiles() {
+    return Array.isArray(extension_settings?.connectionManager?.profiles)
+        ? extension_settings.connectionManager.profiles
+        : [];
 }
 
-async function getCurrentProfile() {
-    try {
-        const raw = await executeSlashCommands('/profile');
-        return (typeof raw === 'string' ? raw : raw?.pipe ?? '').trim();
-    } catch {
-        return '';
-    }
+function getConnectionProfileList() {
+    // Returns [{id, name}, ...] for populating the dropdown
+    return getConnectionProfiles().map(p => ({ id: p.id, name: p.name || p.id }));
+}
+
+function findProfileById(id) {
+    return getConnectionProfiles().find(p => p.id === id) || null;
 }
 
 function getPresetNames() {
     try {
-        const { getPresetManager } = SillyTavern.getContext();
-        const pm = getPresetManager();
-        // getPresetList returns an array of preset name strings
+        const pm = SillyTavern.getContext().getPresetManager?.();
         return pm?.getPresetList?.() ?? [];
     } catch {
         return [];
     }
 }
 
-// ─── EXTRACTION VIA ST CONNECTION PROFILE ────────────────────────────────────
+// ─── SECRET KEY FETCHING ──────────────────────────────────────────────────────
+// Requires allowKeysExposure: true in ST's config.yaml
 
-async function callExtractionAPI(messageBlock) {
-    const { generateRaw } = SillyTavern.getContext();
-    const profileName = settings.connectionProfile;
-    const presetName  = settings.completionPreset;
+let _secretKeyBlocked = false;
 
-    if (!profileName) {
+async function fetchSecretKey(secretKey) {
+    if (!secretKey || _secretKeyBlocked) return null;
+    try {
+        const resp = await fetch('/api/secrets/find', {
+            method:  'POST',
+            headers: SillyTavern.getContext().getRequestHeaders(),
+            body:    JSON.stringify({ key: secretKey }),
+        });
+        if (!resp.ok) {
+            if (resp.status === 403) {
+                _secretKeyBlocked = true;
+                showNotif('⚠ Enable allowKeysExposure in ST config.yaml for extraction API', true);
+            }
+            return null;
+        }
+        const data = await resp.json();
+        return data.value || null;
+    } catch {
+        return null;
+    }
+}
+
+// ─── DIRECT API CALL ──────────────────────────────────────────────────────────
+
+async function directGenerate({ systemPrompt, userPrompt, maxTokens = 1200, temperature = 0 }) {
+    const profileId = settings.connectionProfile;
+    if (!profileId) {
         showNotif('⚠ No connection profile selected in CONFIG', true);
         return null;
     }
 
-    const originalProfile = await getCurrentProfile();
+    const profile = findProfileById(profileId);
+    if (!profile?.api || !profile?.model) {
+        showNotif('⚠ Selected profile has no API or model set', true);
+        return null;
+    }
+
+    const info    = PROVIDER_MAP[profile.api] || { format: 'openai', endpoint: null, secretKey: null };
+    let endpoint  = info.endpoint || profile['api-url'] || null;
+
+    // Strip ST's session-based /subscription/ proxy paths (same fix as TunnelVision)
+    if (endpoint?.includes('/subscription/')) {
+        endpoint = endpoint.replace('/subscription/', '/');
+    }
+    if (!info.endpoint && endpoint && info.format === 'openai' && !endpoint.endsWith('/chat/completions')) {
+        endpoint = endpoint.replace(/\/+$/, '') + '/chat/completions';
+    }
+
+    if (!endpoint) {
+        showNotif(`⚠ No endpoint for provider "${profile.api}"`, true);
+        return null;
+    }
+
+    const apiKey = await fetchSecretKey(info.secretKey);
+    if (!apiKey) {
+        showNotif(`⚠ No API key found for "${profile.api}". Check allowKeysExposure in config.yaml`, true);
+        return null;
+    }
+
+    const model = profile.model;
 
     try {
-        // Switch to extraction profile
-        await executeSlashCommands(`/profile ${profileName}`);
-
-        // Optionally switch preset
-        if (presetName) {
-            await executeSlashCommands(`/preset ${presetName}`);
+        if (info.format === 'anthropic') {
+            return await _callAnthropic({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens });
+        } else if (info.format === 'google') {
+            return await _callGoogle({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens });
+        } else {
+            return await _callOpenAI({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens, provider: profile.api });
         }
-
-        const prompt = `${EXTRACTION_SYSTEM}\n\nExtract stat changes from these roleplay messages:\n\n${messageBlock}`;
-
-        const result = await generateRaw({ prompt, instructOverride: false });
-        return result ?? null;
-
     } catch (err) {
-        showNotif(`Generation error: ${err.message}`, true);
+        showNotif(`✗ API error: ${err.message.slice(0, 80)}`, true);
         return null;
-    } finally {
-        // Always restore original profile
-        if (originalProfile) {
-            await executeSlashCommands(`/profile ${originalProfile}`);
-        }
     }
+}
+
+async function _callAnthropic({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens }) {
+    const resp = await fetch(endpoint, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model, max_tokens: maxTokens, system: systemPrompt || '', messages: [{ role: 'user', content: userPrompt }], temperature }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    return data.content?.find(b => b.type === 'text')?.text ?? '';
+}
+
+async function _callGoogle({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens }) {
+    const fullPrompt = systemPrompt ? `${systemPrompt}\n\n---\n\n${userPrompt}` : userPrompt;
+    const resp = await fetch(`${endpoint}/${model}:generateContent`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+            generationConfig: { temperature, maxOutputTokens: maxTokens },
+            safetySettings: ['HARM_CATEGORY_HARASSMENT','HARM_CATEGORY_HATE_SPEECH','HARM_CATEGORY_SEXUALLY_EXPLICIT','HARM_CATEGORY_DANGEROUS_CONTENT'].map(c => ({ category: c, threshold: 'BLOCK_NONE' })),
+        }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+}
+
+async function _callOpenAI({ endpoint, apiKey, model, systemPrompt, userPrompt, temperature, maxTokens, provider }) {
+    const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
+    if (provider === 'openrouter') { headers['HTTP-Referer'] = window.location.origin; headers['X-Title'] = 'Ellinia Tracker'; }
+    const messages = [];
+    if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+    messages.push({ role: 'user', content: userPrompt });
+    const resp = await fetch(endpoint, {
+        method:  'POST',
+        headers,
+        body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens }),
+    });
+    if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 120)}`);
+    }
+    const data = await resp.json();
+    return data.choices?.[0]?.message?.content ?? '';
+}
+
+// ─── EXTRACTION CALL ──────────────────────────────────────────────────────────
+
+async function callExtractionAPI(messageBlock) {
+    return directGenerate({
+        systemPrompt: EXTRACTION_SYSTEM,
+        userPrompt:   `Extract stat changes from these roleplay messages:\n\n${messageBlock}`,
+        maxTokens:    1200,
+        temperature:  0,
+    });
 }
 
 // ─── TEST CONNECTION ──────────────────────────────────────────────────────────
@@ -767,24 +875,17 @@ async function testConnection() {
     const btn = document.getElementById('el-test-btn');
     if (btn) { btn.textContent = '…'; btn.disabled = true; }
 
-    const profileName = settings.connectionProfile;
-    if (!profileName) {
-        showNotif('⚠ Select a connection profile first', true);
-        if (btn) { btn.textContent = 'Test Connection'; btn.disabled = false; }
-        return;
-    }
-
-    const { generateRaw } = SillyTavern.getContext();
-    const originalProfile = await getCurrentProfile();
-
     try {
-        await executeSlashCommands(`/profile ${profileName}`);
-        const result = await generateRaw({ prompt: 'Reply with only the word OK.', max_new_tokens: 10, instructOverride: false });
-        showNotif(result ? `✓ Connected — model replied: "${result.trim().slice(0, 40)}"` : '✓ Connected (empty reply)');
+        const result = await directGenerate({
+            systemPrompt: 'You are a test assistant.',
+            userPrompt:   'Reply with only the single word: OK',
+            maxTokens:    10,
+            temperature:  0,
+        });
+        showNotif(result ? `✓ Connected — replied: "${result.trim().slice(0, 40)}"` : '✓ Connected (empty reply)');
     } catch (err) {
-        showNotif(`✗ Connection failed: ${err.message}`, true);
+        showNotif(`✗ ${err.message}`, true);
     } finally {
-        if (originalProfile) await executeSlashCommands(`/profile ${originalProfile}`);
         if (btn) { btn.textContent = 'Test Connection'; btn.disabled = false; }
     }
 }
