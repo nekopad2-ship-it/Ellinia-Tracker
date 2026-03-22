@@ -539,6 +539,12 @@ function renderSettingsTab() {
     <div class="el-settings-group el-danger-group">
         <div class="el-settings-title">DANGER ZONE</div>
         <button class="el-btn danger" id="el-reset-all">↺ Reset All Tracked State</button>
+    </div>
+
+    <div class="el-settings-group">
+        <div class="el-settings-title">DEBUG LOG</div>
+        <div id="el-debug-log" style="font-size:0.75rem;font-family:monospace;max-height:200px;overflow-y:auto;color:var(--el-text-dim);line-height:1.6;"></div>
+        <button class="el-btn small" onclick="document.getElementById('el-debug-log').innerHTML='';_elLog.length=0">Clear</button>
     </div>`;
 }
 
@@ -674,6 +680,19 @@ function bindSettingsEvents(root) {
         renderHUD();
         showNotif('State reset');
     });
+}
+
+// ─── IN-APP DEBUG LOG ─────────────────────────────────────────────────────────
+
+const _elLog = [];
+const MAX_LOG = 50;
+
+function elLog(msg) {
+    const ts = new Date().toLocaleTimeString();
+    _elLog.unshift(`[${ts}] ${msg}`);
+    if (_elLog.length > MAX_LOG) _elLog.pop();
+    const el = document.getElementById('el-debug-log');
+    if (el) el.innerHTML = _elLog.map(l => `<div class="el-log-line">${l}</div>`).join('');
 }
 
 // ─── NOTIFICATION ─────────────────────────────────────────────────────────────
@@ -994,6 +1013,7 @@ async function parseLastMessages() {
         if (msgs.length === 0) { showNotif('No messages to parse'); return; }
 
         const raw = await callExtractionAPI(msgs.join('\n\n'));
+        elLog(`Raw response: ${raw ? raw.slice(0, 120) : 'null'}`);
         if (!raw) return;
 
         let updates;
@@ -1012,15 +1032,27 @@ async function parseLastMessages() {
 
         let changed = 0;
         for (const upd of updates) {
-            if (!upd.character || !upd.updates) continue;
-            if (upd.character === 'player') {
+           if (!upd.character || !upd.updates) continue;
+            const charKey = upd.character.toLowerCase().trim();
+            const playerName = (settings.state.player.name || '').toLowerCase().trim();
+            if (charKey === 'player' || charKey === playerName || charKey === '{{user}}') {
                 applyUpdates(settings.state.player, upd.updates);
                 changed++;
-            } else if (settings.state.npcs[upd.character]) {
-                applyUpdates(settings.state.npcs[upd.character], upd.updates);
-                changed++;
+                elLog(`✓ Updated player (matched as "${upd.character}")`);
+            } else {
+                // Try exact match first, then case-insensitive
+                const npcKey = Object.keys(settings.state.npcs).find(
+                    k => k.toLowerCase().trim() === charKey
+                );
+                if (npcKey) {
+                    applyUpdates(settings.state.npcs[npcKey], upd.updates);
+                    changed++;
+                    elLog(`✓ Updated NPC: ${npcKey}`);
+                } else {
+                    elLog(`⚠ No match for character: "${upd.character}"`);
+                }
             }
-        }
+
 
         if (changed > 0) {
             saveState();
