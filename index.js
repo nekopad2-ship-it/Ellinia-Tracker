@@ -992,6 +992,19 @@ function applyUpdates(char, updates) {
     }
 }
 
+// ─── IN-APP DEBUG LOG ─────────────────────────────────────────────────────────
+
+const _elLog = [];
+const MAX_LOG = 50;
+
+function elLog(msg) {
+    const ts = new Date().toLocaleTimeString();
+    _elLog.unshift(`[${ts}] ${msg}`);
+    if (_elLog.length > MAX_LOG) _elLog.pop();
+    const el = document.getElementById('el-debug-log');
+    if (el) el.innerHTML = _elLog.map(l => `<div class="el-log-line">${l}</div>`).join('');
+}
+
 // ─── PARSE TRIGGER ────────────────────────────────────────────────────────────
 
 async function parseLastMessages() {
@@ -1013,7 +1026,7 @@ async function parseLastMessages() {
         if (msgs.length === 0) { showNotif('No messages to parse'); return; }
 
         const raw = await callExtractionAPI(msgs.join('\n\n'));
-        elLog(`Raw response: ${raw ? raw.slice(0, 120) : 'null'}`);
+        elLog(`Raw: ${raw ? raw.slice(0, 150) : 'null'}`);
         if (!raw) return;
 
         let updates;
