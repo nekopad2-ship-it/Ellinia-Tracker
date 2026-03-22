@@ -447,3 +447,123 @@
 @media (min-width: 1001px) {
     .el-mobile-close { display: none !important; }
 }
+
+/* ─── EDITABLE FIELDS ────────────────────────────────────────────── */
+
+.el-editable[contenteditable] {
+    cursor: text;
+    border-radius: 0.25em;
+    padding: 0.1em 0.25em;
+    margin: -0.1em -0.25em;
+    transition: background 0.2s, outline 0.2s;
+    outline: 1px solid transparent;
+    min-width: 2em;
+    display: inline-block;
+}
+
+.el-editable[contenteditable]:hover {
+    background: rgba(255,255,255,0.07);
+    outline-color: var(--el-border);
+}
+
+.el-editable[contenteditable]:focus {
+    background: rgba(0,0,0,0.3);
+    outline-color: var(--el-hi);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--el-hi) 20%, transparent);
+}
+
+.el-notes-edit {
+    width: 100%;
+    min-height: 2.5em;
+    font-size: clamp(0.8rem, 0.95vw, 0.95rem);
+    color: var(--el-text-dim);
+    line-height: 1.5;
+    font-style: italic;
+    display: block;
+    box-sizing: border-box;
+}
+
+/* +/- buttons */
+.el-pm-btn {
+    width:           clamp(20px, 2.2vh, 26px);
+    height:          clamp(20px, 2.2vh, 26px);
+    padding:         0;
+    background:      var(--el-accent);
+    border:          1px solid var(--el-border);
+    border-radius:   0.25em;
+    color:           var(--el-text);
+    font-size:       clamp(0.85rem, 1.1vw, 1.1rem);
+    font-weight:     bold;
+    cursor:          pointer;
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    transition:      all 0.15s ease;
+    flex-shrink:     0;
+    line-height:     1;
+    user-select:     none;
+}
+
+.el-pm-btn:hover  { background: var(--el-hi); border-color: var(--el-hi); color: #fff; }
+.el-pm-btn:active { transform: scale(0.92); }
+.el-pm-btn.small  { width: clamp(18px, 1.8vh, 22px); height: clamp(18px, 1.8vh, 22px); font-size: clamp(0.75rem, 0.9vw, 0.9rem); }
+
+.el-pm-btns { display: flex; align-items: center; gap: 0.25em; flex-shrink: 0; }
+
+/* Stat edit row */
+.el-stat-edit-row {
+    display:     flex;
+    align-items: center;
+    justify-content: space-between;
+    gap:         0.2em;
+    margin-top:  0.1em;
+}
+
+.el-stat-edit-row .el-stat-val { flex: 1; text-align: center; }
+
+/* HP/MP value inputs */
+.el-val-input {
+    width:         3em;
+    background:    transparent;
+    border:        none;
+    border-bottom: 1px solid var(--el-border);
+    color:         var(--el-text);
+    font-size:     clamp(0.75rem, 0.9vw, 0.9rem);
+    font-weight:   600;
+    text-align:    right;
+    font-family:   inherit;
+    outline:       none;
+    padding:       0 0.1em;
+    transition:    border-color 0.2s;
+}
+
+.el-val-input:focus  { border-bottom-color: var(--el-hi); }
+.el-val-input::-webkit-inner-spin-button,
+.el-val-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+/* Rank select inline */
+.el-rank-select {
+    background:    var(--el-accent);
+    border:        1px solid var(--el-border);
+    color:         var(--el-text);
+    font-size:     clamp(0.7rem, 0.85vw, 0.85rem);
+    font-weight:   bold;
+    border-radius: 0.25em;
+    padding:       0.1em 0.2em;
+    cursor:        pointer;
+    outline:       none;
+    transition:    border-color 0.2s;
+}
+
+.el-rank-select:focus { border-color: var(--el-hi); }
+
+/* ABO cycle clickable */
+.el-abo-cycle {
+    cursor:     pointer;
+    transition: opacity 0.2s;
+    user-select: none;
+    border-radius: 0.25em;
+    padding: 0.1em 0.25em;
+}
+
+.el-abo-cycle:hover { opacity: 0.75; }
