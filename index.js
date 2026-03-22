@@ -284,76 +284,62 @@ function totalLevel(char) {
 
 function renderCharPanel(char) {
     const capped  = SOFT_CAPS[char.classRank] || 20;
-    const charId  = char.isPlayer ? '__player__' : char.name;
+    const cid     = char.isPlayer ? '__player__' : char.name;
     const aboIcon = ABO_ICONS[char.aboGender] || '◇';
-    const aboColor = STATUS_COLORS[char.aboStatus] || '#888';
+    const aboColor = STATUS_COLORS[char.aboStatus] || 'var(--el-text-dim)';
     const statusTag = char.aboStatus !== 'neutral'
-        ? `<span class="el-abo-active" style="color:${aboColor}">[${char.aboStatus.toUpperCase()}]</span>`
-        : '';
+        ? `<span class="el-abo-active" style="color:${aboColor}">[${char.aboStatus.toUpperCase()}]</span>` : '';
+
+    const advOpts = RANK_ORDER.filter(r => r !== 'Mythic').map(r =>
+        `<option value="${r}" ${char.adventurerRank === r ? 'selected' : ''}>${r}</option>`).join('');
 
     // ── Identity ──────────────────────────────────────────────────────
-    const advOptions = RANK_ORDER.filter(r => r !== 'Mythic').map(r =>
-        `<option value="${r}" ${char.adventurerRank === r ? 'selected' : ''}>${r}</option>`
-    ).join('');
-
     let html = `<div class="el-identity">
-        <div class="el-ident-name el-editable" data-char="${charId}" data-field="name" contenteditable="true" title="Click to edit name">${char.name || '—'}</div>
-        <div class="el-ident-sub">
-            <span class="el-editable" data-char="${charId}" data-field="class" contenteditable="true" title="Click to edit class">${char.class || '—'}</span>
+        <div class="el-editable el-ident-name" data-cid="${cid}" data-f="name" contenteditable="true">${char.name || '—'}</div>
+        <div class="el-ident-row">
+            <span class="el-ident-label">Class:</span>
+            <span class="el-editable" data-cid="${cid}" data-f="class" contenteditable="true">${char.class || '—'}</span>
             ${rankBadge(char.classRank)}
-            <span class="el-adv">ADV <select class="el-rank-select" data-char="${charId}" data-field="adventurerRank">${advOptions}</select></span>
         </div>
-        <div class="el-ident-sub2">
-            <span class="el-abo el-abo-cycle" data-char="${charId}" title="Click to cycle ABO status">${aboIcon} ${char.aboGender} ${statusTag}</span>
+        <div class="el-ident-row">
+            <span class="el-ident-label">ADV:</span>
+            <select class="el-rank-select" data-cid="${cid}" data-f="adventurerRank">${advOpts}</select>
+            <span class="el-abo el-abo-cycle" data-cid="${cid}" title="Click to cycle ABO status">${aboIcon} ${char.aboGender} ${statusTag}</span>
             <span class="el-total-lv">∑ Lv.${totalLevel(char)}</span>
         </div>
     </div>`;
 
     // ── HP / MP ───────────────────────────────────────────────────────
-    const hpPct = char.hp.max > 0 ? Math.min(100, Math.round((char.hp.current / char.hp.max) * 100)) : 0;
-    const mpPct = char.mana.max > 0 ? Math.min(100, Math.round((char.mana.current / char.mana.max) * 100)) : 0;
-    const hpCrit = hpPct < 25;
-
+    const hpPct  = char.hp.max > 0 ? Math.min(100, Math.round((char.hp.current / char.hp.max) * 100)) : 0;
+    const mpPct  = char.mana.max > 0 ? Math.min(100, Math.round((char.mana.current / char.mana.max) * 100)) : 0;
     html += `<div class="el-section">
         <div class="el-bar-row">
             <span class="el-bar-label">HP</span>
-            <div class="el-bar-track">
-                <div class="el-bar-fill el-hp${hpCrit ? ' critical' : ''}" style="width:${hpPct}%"></div>
-            </div>
-            <span class="el-bar-val">
-                <input class="el-val-input" type="number" data-char="${charId}" data-field="hp.current" value="${char.hp.current}" min="0" max="${char.hp.max}" title="Current HP"/>
-                / <input class="el-val-input" type="number" data-char="${charId}" data-field="hp.max" value="${char.hp.max}" min="1" title="Max HP"/>
-            </span>
+            <div class="el-bar-track"><div class="el-bar-fill el-hp${hpPct < 25 ? ' critical' : ''}" style="width:${hpPct}%"></div></div>
+            <span class="el-hpmp-val"><input class="el-vi" type="number" data-cid="${cid}" data-f="hp.current" value="${char.hp.current}" min="0"/>/<input class="el-vi" type="number" data-cid="${cid}" data-f="hp.max" value="${char.hp.max}" min="1"/></span>
         </div>
         <div class="el-bar-row">
             <span class="el-bar-label">MP</span>
-            <div class="el-bar-track">
-                <div class="el-bar-fill el-mp" style="width:${mpPct}%"></div>
-            </div>
-            <span class="el-bar-val">
-                <input class="el-val-input" type="number" data-char="${charId}" data-field="mana.current" value="${char.mana.current}" min="0" max="${char.mana.max}" title="Current MP"/>
-                / <input class="el-val-input" type="number" data-char="${charId}" data-field="mana.max" value="${char.mana.max}" min="1" title="Max MP"/>
-            </span>
+            <div class="el-bar-track"><div class="el-bar-fill el-mp" style="width:${mpPct}%"></div></div>
+            <span class="el-hpmp-val"><input class="el-vi" type="number" data-cid="${cid}" data-f="mana.current" value="${char.mana.current}" min="0"/>/<input class="el-vi" type="number" data-cid="${cid}" data-f="mana.max" value="${char.mana.max}" min="1"/></span>
         </div>
     </div>`;
 
     // ── Thread Sight (player only) ────────────────────────────────────
     if (char.isPlayer) {
-        const tsLevel = char.threadSightLevel || 0;
-        const tsDesc = ['—', 'Common legible', 'Uncommon legible', 'Rare legible + mana read', 'Weak point detection', 'Epic legible + full HUD'][tsLevel] || '?';
+        const tsl = char.threadSightLevel || 0;
+        const tsd = ['—','Common legible','Uncommon legible','Rare legible + mana read','Weak point detection','Epic legible + full HUD'][tsl] || '?';
         html += `<div class="el-section el-ts-section">
             <div class="el-sec-title">◈ THREAD SIGHT</div>
             <div class="el-ts-row">
-                ${[1,2,3,4,5].map(i =>
-                    `<div class="el-ts-pip${i <= tsLevel ? ' active' : ''}" title="Level ${i}"></div>`
-                ).join('')}
-                <span class="el-ts-desc">Lv.${tsLevel}</span>
-                <div class="el-pm-btns">
-                    <button class="el-pm-btn" data-char="${charId}" data-field="threadSightLevel" data-delta="-1">−</button>
-                    <button class="el-pm-btn" data-char="${charId}" data-field="threadSightLevel" data-delta="1">+</button>
+                ${[1,2,3,4,5].map(i=>`<div class="el-ts-pip${i<=tsl?' active':''}" title="Level ${i}"></div>`).join('')}
+                <span class="el-ts-desc" style="color:var(--el-text)">Lv.${tsl}</span>
+                <div class="el-pm-btns" style="margin-left:auto">
+                    <button class="el-pm-btn" data-cid="${cid}" data-f="threadSightLevel" data-d="-1">−</button>
+                    <button class="el-pm-btn" data-cid="${cid}" data-f="threadSightLevel" data-d="1">+</button>
                 </div>
             </div>
-            <div style="font-size:0.75rem;color:var(--el-text-dim);margin-top:0.25em">${tsDesc}</div>
+            <div class="el-ts-desc-line">${tsd}</div>
         </div>`;
     }
 
@@ -362,16 +348,16 @@ function renderCharPanel(char) {
         <div class="el-sec-title">ATTRIBUTES <span class="el-cap-note">soft cap: ${capped}</span></div>
         <div class="el-stats-grid">
             ${STATS.map(s => {
-                const val  = char.stats?.[s] || 0;
-                const pct  = Math.min(100, Math.round((val / capped) * 100));
+                const val = char.stats?.[s] || 0;
+                const pct = Math.min(100, Math.round((val/capped)*100));
                 const over = val >= capped;
-                return `<div class="el-stat${over ? ' overcap' : ''}">
+                return `<div class="el-stat${over?' overcap':''}">
                     <span class="el-stat-name">${s}</span>
                     <div class="el-stat-track"><div class="el-stat-fill" style="width:${pct}%"></div></div>
                     <div class="el-stat-edit-row">
-                        <button class="el-pm-btn" data-char="${charId}" data-field="stats.${s}" data-delta="-1">−</button>
+                        <button class="el-pm-btn" data-cid="${cid}" data-f="stats.${s}" data-d="-1">−</button>
                         <span class="el-stat-val">${val}</span>
-                        <button class="el-pm-btn" data-char="${charId}" data-field="stats.${s}" data-delta="1">+</button>
+                        <button class="el-pm-btn" data-cid="${cid}" data-f="stats.${s}" data-d="1">+</button>
                     </div>
                 </div>`;
             }).join('')}
@@ -382,50 +368,57 @@ function renderCharPanel(char) {
     html += `<div class="el-section">
         <div class="el-sec-title">DISCIPLINES</div>
         ${DISCIPLINES.map(d => {
-            const data  = char.disciplines?.[d] || { xp: 0, level: 1 };
-            const toNext = Math.max(1, Math.round(100 * Math.pow(data.level, 1.5)));
-            const pct   = Math.min(100, Math.round(((data.xp % toNext) / toNext) * 100));
+            const data = char.disciplines?.[d] || {xp:0,level:1};
+            const toNext = Math.max(1, Math.round(100*Math.pow(data.level,1.5)));
+            const pct = Math.min(100, Math.round(((data.xp%toNext)/toNext)*100));
             return `<div class="el-disc-row">
                 <span class="el-disc-name">${d}</span>
                 <div class="el-bar-track slim"><div class="el-bar-fill el-xp" style="width:${pct}%"></div></div>
                 <div class="el-pm-btns">
-                    <button class="el-pm-btn small" data-char="${charId}" data-field="disc.${d}" data-delta="-1">−</button>
+                    <button class="el-pm-btn small" data-cid="${cid}" data-f="disc.${d}" data-d="-1">−</button>
                     <span class="el-disc-lvl">Lv.${data.level}</span>
-                    <button class="el-pm-btn small" data-char="${charId}" data-field="disc.${d}" data-delta="1">+</button>
+                    <button class="el-pm-btn small" data-cid="${cid}" data-f="disc.${d}" data-d="1">+</button>
                 </div>
             </div>`;
         }).join('')}
     </div>`;
 
     // ── Skills ─────────────────────────────────────────────────────────
-    if (char.skills?.length > 0) {
-        const sid = `skills-${charId.replace(/\s+/g, '_')}`;
-        html += `<div class="el-section el-collapse" data-target="${sid}">
-            <div class="el-sec-title el-toggle">SKILLS (${char.skills.length}) <span class="el-arrow">▼</span></div>
-            <div class="el-collapse-body" id="${sid}">
-                ${char.skills.map(sk => `
-                <div class="el-skill-row">
-                    ${rankBadge(sk.rank)} <span class="el-skill-lv">Lv.${sk.level}</span>
-                    <span class="el-skill-name">${sk.name}</span>
-                    ${sk.description ? `<div class="el-skill-desc">${sk.description}</div>` : ''}
-                </div>`).join('')}
-            </div>
-        </div>`;
-    }
+    const sid = `skills-${cid.replace(/\W/g,'_')}`;
+    html += `<div class="el-section el-collapse" data-target="${sid}">
+        <div class="el-sec-title el-toggle">SKILLS (${char.skills?.length||0}) <span class="el-arrow">▼</span></div>
+        <div class="el-collapse-body" id="${sid}">
+            ${(char.skills||[]).map((sk,i) => `
+            <div class="el-skill-edit-row">
+                <select class="el-mini-sel" data-cid="${cid}" data-f="skill.rank.${i}">${RANK_ORDER.map(r=>`<option value="${r}" ${sk.rank===r?'selected':''}>${r}</option>`).join('')}</select>
+                <div class="el-pm-btns">
+                    <button class="el-pm-btn small" data-cid="${cid}" data-f="skill.level.${i}" data-d="-1">−</button>
+                    <span class="el-disc-lvl">Lv.${sk.level}</span>
+                    <button class="el-pm-btn small" data-cid="${cid}" data-f="skill.level.${i}" data-d="1">+</button>
+                </div>
+                <span class="el-editable el-skill-name" data-cid="${cid}" data-f="skill.name.${i}" contenteditable="true">${sk.name}</span>
+                <button class="el-rm-btn" data-cid="${cid}" data-f="skill.remove.${i}" title="Remove skill">✕</button>
+                <div class="el-editable el-skill-desc" data-cid="${cid}" data-f="skill.desc.${i}" contenteditable="true">${sk.description||''}</div>
+            </div>`).join('')}
+            <button class="el-btn small el-add-btn" data-cid="${cid}" data-f="skill.add">+ Add Skill</button>
+        </div>
+    </div>`;
 
     // ── Equipment ──────────────────────────────────────────────────────
-    const eid = `equip-${charId.replace(/\s+/g, '_')}`;
+    const eid = `equip-${cid.replace(/\W/g,'_')}`;
+    const TIERS = ['Common','Uncommon','Rare','Epic','Legendary','Unique'];
     html += `<div class="el-section el-collapse" data-target="${eid}">
         <div class="el-sec-title el-toggle">EQUIPMENT <span class="el-arrow">▼</span></div>
         <div class="el-collapse-body" id="${eid}">
             <div class="el-equip-grid">
                 ${EQUIP_SLOTS.map(slot => {
                     const item = char.equipment?.[slot];
-                    return `<div class="el-equip-slot${item ? ' filled' : ''}">
+                    const tierOpts = TIERS.map(t=>`<option value="${t}" ${item?.tier===t?'selected':''}>${t}</option>`).join('');
+                    return `<div class="el-equip-slot${item?' filled':''}">
                         <span class="el-slot-label">${SLOT_LABELS[slot]}</span>
-                        ${item
-                            ? `<span class="el-slot-item">${tierBadge(item.tier)} ${item.name}${item.runes?.length ? ` <span class="el-runes">+${item.runes.length}r</span>` : ''}</span>`
-                            : '<span class="el-slot-empty">—</span>'}
+                        <select class="el-mini-sel el-tier-sel" data-cid="${cid}" data-f="equip.tier.${slot}">${tierOpts}</select>
+                        <span class="el-editable el-slot-name" data-cid="${cid}" data-f="equip.name.${slot}" contenteditable="true">${item?.name||''}</span>
+                        ${item ? `<button class="el-rm-btn" data-cid="${cid}" data-f="equip.clear.${slot}" title="Clear slot">✕</button>` : ''}
                     </div>`;
                 }).join('')}
             </div>
@@ -433,40 +426,55 @@ function renderCharPanel(char) {
     </div>`;
 
     // ── Inventory ──────────────────────────────────────────────────────
-    const iid = `inv-${charId.replace(/\s+/g, '_')}`;
+    const iid = `inv-${cid.replace(/\W/g,'_')}`;
     html += `<div class="el-section el-collapse" data-target="${iid}">
         <div class="el-sec-title el-toggle">INVENTORY <span class="el-arrow">▼</span>
-            <span class="el-mesos">◎ ${(char.mesos || 0).toLocaleString()}</span>
+            <span class="el-mesos-row">◎ <input class="el-vi el-mesos-input" type="number" data-cid="${cid}" data-f="mesos" value="${char.mesos||0}" min="0"/></span>
         </div>
         <div class="el-collapse-body" id="${iid}">
-            ${char.inventory?.length > 0
-                ? char.inventory.map(item => `
-                    <div class="el-inv-row">
-                        ${tierBadge(item.tier || 'Common')}
-                        <span class="el-inv-name">${item.name}</span>
-                        <span class="el-inv-qty">×${item.quantity || 1}</span>
-                    </div>`).join('')
-                : '<div class="el-empty">Empty</div>'}
+            ${(char.inventory||[]).map((item,i) => {
+                const tierOpts = TIERS.map(t=>`<option value="${t}" ${item.tier===t?'selected':''}>${t}</option>`).join('');
+                return `<div class="el-inv-edit-row">
+                    <select class="el-mini-sel el-tier-sel" data-cid="${cid}" data-f="inv.tier.${i}">${tierOpts}</select>
+                    <span class="el-editable el-inv-name" data-cid="${cid}" data-f="inv.name.${i}" contenteditable="true">${item.name}</span>
+                    <div class="el-pm-btns">
+                        <button class="el-pm-btn small" data-cid="${cid}" data-f="inv.qty.${i}" data-d="-1">−</button>
+                        <span class="el-disc-lvl">×${item.quantity||1}</span>
+                        <button class="el-pm-btn small" data-cid="${cid}" data-f="inv.qty.${i}" data-d="1">+</button>
+                    </div>
+                    <button class="el-rm-btn" data-cid="${cid}" data-f="inv.remove.${i}" title="Remove">✕</button>
+                </div>`;
+            }).join('')}
+            ${(char.inventory||[]).length === 0 ? '<div class="el-empty">Empty</div>' : ''}
+            <button class="el-btn small el-add-btn" data-cid="${cid}" data-f="inv.add">+ Add Item</button>
         </div>
     </div>`;
 
     // ── Status Effects ─────────────────────────────────────────────────
-    if (char.statusEffects?.length > 0) {
-        html += `<div class="el-section el-status-section">
-            <div class="el-sec-title">STATUS EFFECTS</div>
-            ${char.statusEffects.map(fx => `
+    const xid = `status-${cid.replace(/\W/g,'_')}`;
+    html += `<div class="el-section el-collapse" data-target="${xid}">
+        <div class="el-sec-title el-toggle">STATUS EFFECTS (${(char.statusEffects||[]).length}) <span class="el-arrow">▼</span></div>
+        <div class="el-collapse-body" id="${xid}">
+            ${(char.statusEffects||[]).map((fx,i) => `
             <div class="el-status-row">
-                <span class="el-status-name">${fx.name}</span>
-                ${fx.duration != null ? `<span class="el-status-dur">${fx.duration}t</span>` : ''}
-                ${fx.effect ? `<span class="el-status-desc">${fx.effect}</span>` : ''}
+                <span class="el-editable el-status-name" data-cid="${cid}" data-f="fx.name.${i}" contenteditable="true">${fx.name}</span>
+                <div class="el-pm-btns">
+                    <button class="el-pm-btn small" data-cid="${cid}" data-f="fx.dur.${i}" data-d="-1">−</button>
+                    <span class="el-disc-lvl">${fx.duration??'∞'}t</span>
+                    <button class="el-pm-btn small" data-cid="${cid}" data-f="fx.dur.${i}" data-d="1">+</button>
+                </div>
+                <button class="el-rm-btn" data-cid="${cid}" data-f="fx.remove.${i}" title="Remove">✕</button>
+                <div class="el-editable el-status-desc" data-cid="${cid}" data-f="fx.desc.${i}" contenteditable="true">${fx.effect||''}</div>
             </div>`).join('')}
-        </div>`;
-    }
+            ${(char.statusEffects||[]).length === 0 ? '<div class="el-empty">None</div>' : ''}
+            <button class="el-btn small el-add-btn" data-cid="${cid}" data-f="fx.add">+ Add Effect</button>
+        </div>
+    </div>`;
 
     // ── Notes ──────────────────────────────────────────────────────────
     html += `<div class="el-section">
         <div class="el-sec-title">NOTES</div>
-        <div class="el-editable el-notes-edit" data-char="${charId}" data-field="notes" contenteditable="true" title="Click to edit notes">${char.notes || '<span style="opacity:0.4;font-style:italic">Click to add notes…</span>'}</div>
+        <div class="el-editable el-notes-edit" data-cid="${cid}" data-f="notes" contenteditable="true">${char.notes||'<span style="opacity:0.4;font-style:italic">Click to add notes…</span>'}</div>
     </div>`;
 
     return html;
@@ -474,121 +482,157 @@ function renderCharPanel(char) {
 
 // ─── EDIT EVENT BINDING ───────────────────────────────────────────────────────
 
-function getCharByKey(charId) {
-    if (charId === '__player__') return settings.state.player;
-    return settings.state.npcs[charId] || null;
-}
-
-function setNestedField(char, field, value) {
-    if (field === 'hp.current')    { char.hp.current = Math.max(0, Math.min(Number(value), char.hp.max)); return; }
-    if (field === 'hp.max')        { char.hp.max = Math.max(1, Number(value)); char.hp.current = Math.min(char.hp.current, char.hp.max); return; }
-    if (field === 'mana.current')  { char.mana.current = Math.max(0, Math.min(Number(value), char.mana.max)); return; }
-    if (field === 'mana.max')      { char.mana.max = Math.max(1, Number(value)); char.mana.current = Math.min(char.mana.current, char.mana.max); return; }
-    if (field.startsWith('stats.')) { const s = field.slice(6); if (char.stats?.[s] !== undefined) char.stats[s] = Math.max(0, Number(value)); return; }
-    if (field.startsWith('disc.'))  {
-        const d = field.slice(5);
-        if (char.disciplines?.[d]) {
-            char.disciplines[d].level = Math.max(1, Number(value));
-        }
-        return;
-    }
-    if (field === 'threadSightLevel') { char.threadSightLevel = Math.max(0, Math.min(5, Number(value))); return; }
-    if (field === 'name')          { char.name = String(value).trim(); return; }
-    if (field === 'class')         { char.class = String(value).trim(); return; }
-    if (field === 'notes')         { char.notes = String(value).trim(); return; }
-    if (field === 'adventurerRank') { char.adventurerRank = String(value); return; }
+function getCharByKey(cid) {
+    if (cid === '__player__') return settings.state.player;
+    return settings.state.npcs[cid] || null;
 }
 
 function bindEditEvents(root) {
-    // +/- buttons
-    root.querySelectorAll('.el-pm-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const charId = btn.dataset.char;
-            const field  = btn.dataset.field;
-            const delta  = parseInt(btn.dataset.delta);
-            const char   = getCharByKey(charId);
-            if (!char) return;
 
-            if (field.startsWith('stats.')) {
-                const s = field.slice(6);
-                char.stats[s] = Math.max(0, (char.stats[s] || 0) + delta);
-            } else if (field.startsWith('disc.')) {
-                const d = field.slice(5);
-                if (char.disciplines?.[d]) {
-                    char.disciplines[d].level = Math.max(1, (char.disciplines[d].level || 1) + delta);
+    // ── +/- buttons ───────────────────────────────────────────────────
+    root.querySelectorAll('.el-pm-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const cid   = btn.dataset.cid;
+            const f     = btn.dataset.f;
+            const delta = parseInt(btn.dataset.d);
+            const char  = getCharByKey(cid);
+            if (!char || isNaN(delta)) return;
+
+            if (f.startsWith('stats.')) {
+                const s = f.slice(6); char.stats[s] = Math.max(0, (char.stats[s]||0) + delta);
+            } else if (f.startsWith('disc.')) {
+                const d = f.slice(5);
+                if (char.disciplines?.[d]) char.disciplines[d].level = Math.max(1, (char.disciplines[d].level||1) + delta);
+            } else if (f === 'threadSightLevel') {
+                char.threadSightLevel = Math.max(0, Math.min(5, (char.threadSightLevel||0) + delta));
+            } else if (f.startsWith('skill.level.')) {
+                const i = parseInt(f.split('.')[2]);
+                if (char.skills?.[i]) char.skills[i].level = Math.max(1, (char.skills[i].level||1) + delta);
+            } else if (f.startsWith('inv.qty.')) {
+                const i = parseInt(f.split('.')[2]);
+                if (char.inventory?.[i]) {
+                    char.inventory[i].quantity = Math.max(0, (char.inventory[i].quantity||1) + delta);
+                    if (char.inventory[i].quantity === 0) char.inventory.splice(i, 1);
                 }
-            } else if (field === 'threadSightLevel') {
-                char.threadSightLevel = Math.max(0, Math.min(5, (char.threadSightLevel || 0) + delta));
+            } else if (f.startsWith('fx.dur.')) {
+                const i = parseInt(f.split('.')[2]);
+                if (char.statusEffects?.[i]) {
+                    const cur = char.statusEffects[i].duration ?? 0;
+                    char.statusEffects[i].duration = Math.max(0, cur + delta);
+                }
             }
-            saveState();
-            renderHUD();
+            saveState(); renderHUD();
         });
     });
 
-    // HP/MP number inputs
-    root.querySelectorAll('.el-val-input').forEach(input => {
+    // ── Number inputs (HP/MP/mesos) ───────────────────────────────────
+    root.querySelectorAll('.el-vi').forEach(input => {
         const commit = () => {
-            const charId = input.dataset.char;
-            const field  = input.dataset.field;
-            const char   = getCharByKey(charId);
+            const char = getCharByKey(input.dataset.cid);
             if (!char) return;
-            setNestedField(char, field, input.value);
-            saveState();
-            renderHUD();
+            const f = input.dataset.f;
+            const v = Number(input.value);
+            if (f === 'hp.current')   { char.hp.current   = Math.max(0, Math.min(v, char.hp.max)); }
+            else if (f === 'hp.max')  { char.hp.max = Math.max(1, v); char.hp.current = Math.min(char.hp.current, char.hp.max); }
+            else if (f === 'mana.current') { char.mana.current = Math.max(0, Math.min(v, char.mana.max)); }
+            else if (f === 'mana.max')     { char.mana.max = Math.max(1, v); char.mana.current = Math.min(char.mana.current, char.mana.max); }
+            else if (f === 'mesos')   { char.mesos = Math.max(0, v); }
+            saveState(); renderHUD();
         };
         input.addEventListener('change', commit);
-        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { commit(); e.target.blur(); } });
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') { commit(); e.target.blur(); } });
+        // prevent collapsible toggle from firing when clicking the input
+        input.addEventListener('click', e => e.stopPropagation());
     });
 
-    // Contenteditable fields (name, class, notes)
+    // ── Contenteditable fields ────────────────────────────────────────
     root.querySelectorAll('.el-editable[contenteditable]').forEach(el => {
         el.addEventListener('blur', () => {
-            const charId = el.dataset.char;
-            const field  = el.dataset.field;
-            const char   = getCharByKey(charId);
+            const char = getCharByKey(el.dataset.cid);
             if (!char) return;
-            // Clear placeholder if needed
+            const f   = el.dataset.f;
             const val = el.innerText.trim();
-            setNestedField(char, field, val);
+            if (f === 'name')  { char.name  = val; }
+            else if (f === 'class') { char.class = val; }
+            else if (f === 'notes') { char.notes = val; }
+            else if (f.startsWith('skill.name.'))  { const i = parseInt(f.split('.')[2]); if (char.skills?.[i]) char.skills[i].name = val; }
+            else if (f.startsWith('skill.desc.'))  { const i = parseInt(f.split('.')[2]); if (char.skills?.[i]) char.skills[i].description = val; }
+            else if (f.startsWith('equip.name.'))  { const slot = f.split('.')[2]; if (char.equipment) { if (!char.equipment[slot]) char.equipment[slot] = {name:'',tier:'Common'}; char.equipment[slot].name = val; if (!val) char.equipment[slot] = null; } }
+            else if (f.startsWith('inv.name.'))    { const i = parseInt(f.split('.')[2]); if (char.inventory?.[i]) char.inventory[i].name = val; }
+            else if (f.startsWith('fx.name.'))     { const i = parseInt(f.split('.')[2]); if (char.statusEffects?.[i]) char.statusEffects[i].name = val; }
+            else if (f.startsWith('fx.desc.'))     { const i = parseInt(f.split('.')[2]); if (char.statusEffects?.[i]) char.statusEffects[i].effect = val; }
             saveState();
-            // Don't re-render on blur — it causes cursor loss
         });
-        el.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
-        });
+        el.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); el.blur(); } });
     });
 
-    // Adventurer Rank dropdown
-    root.querySelectorAll('.el-rank-select').forEach(sel => {
-        sel.addEventListener('change', () => {
-            const char = getCharByKey(sel.dataset.char);
+    // ── Dropdowns (rank, tier) ────────────────────────────────────────
+    root.querySelectorAll('.el-rank-select, .el-mini-sel').forEach(sel => {
+        sel.addEventListener('change', e => {
+            e.stopPropagation();
+            const char = getCharByKey(sel.dataset.cid);
             if (!char) return;
-            char.adventurerRank = sel.value;
-            saveState();
-            renderHUD();
+            const f = sel.dataset.f;
+            const v = sel.value;
+            if (f === 'adventurerRank') { char.adventurerRank = v; }
+            else if (f.startsWith('skill.rank.'))  { const i = parseInt(f.split('.')[2]); if (char.skills?.[i]) char.skills[i].rank = v; }
+            else if (f.startsWith('equip.tier.'))  { const slot = f.split('.')[2]; if (char.equipment?.[slot]) char.equipment[slot].tier = v; }
+            else if (f.startsWith('inv.tier.'))    { const i = parseInt(f.split('.')[2]); if (char.inventory?.[i]) char.inventory[i].tier = v; }
+            saveState(); renderHUD();
+        });
+        sel.addEventListener('click', e => e.stopPropagation());
+    });
+
+    // ── Remove buttons ────────────────────────────────────────────────
+    root.querySelectorAll('.el-rm-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const char = getCharByKey(btn.dataset.cid);
+            if (!char) return;
+            const f = btn.dataset.f;
+            if (f.startsWith('skill.remove.'))  { char.skills.splice(parseInt(f.split('.')[2]), 1); }
+            else if (f.startsWith('inv.remove.'))    { char.inventory.splice(parseInt(f.split('.')[2]), 1); }
+            else if (f.startsWith('equip.clear.'))   { const slot = f.split('.')[2]; char.equipment[slot] = null; }
+            else if (f.startsWith('fx.remove.'))     { char.statusEffects.splice(parseInt(f.split('.')[2]), 1); }
+            saveState(); renderHUD();
         });
     });
 
-    // ABO status cycle
+    // ── Add buttons ───────────────────────────────────────────────────
+    root.querySelectorAll('.el-add-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const char = getCharByKey(btn.dataset.cid);
+            if (!char) return;
+            const f = btn.dataset.f;
+            if (f === 'skill.add') {
+                if (!char.skills) char.skills = [];
+                char.skills.push({ name: 'New Skill', rank: 'F', level: 1, description: '' });
+            } else if (f === 'inv.add') {
+                if (!char.inventory) char.inventory = [];
+                char.inventory.push({ name: 'New Item', tier: 'Common', quantity: 1 });
+            } else if (f === 'fx.add') {
+                if (!char.statusEffects) char.statusEffects = [];
+                char.statusEffects.push({ name: 'New Effect', duration: 1, effect: '' });
+            }
+            saveState(); renderHUD();
+        });
+    });
+
+    // ── ABO cycle ─────────────────────────────────────────────────────
     root.querySelectorAll('.el-abo-cycle').forEach(el => {
-        el.addEventListener('click', () => {
-            const char = getCharByKey(el.dataset.char);
+        el.addEventListener('click', e => {
+            e.stopPropagation();
+            const char = getCharByKey(el.dataset.cid);
             if (!char) return;
-            const cycles = {
-                Alpha: ['neutral', 'rut', 'neutral'],
-                Omega: ['neutral', 'heat', 'neutral'],
-                Beta:  ['neutral'],
-            };
+            const cycles = { Alpha: ['neutral','rut'], Omega: ['neutral','heat'], Beta: ['neutral'] };
             const seq = cycles[char.aboGender] || ['neutral'];
-            const idx = seq.indexOf(char.aboStatus);
-            char.aboStatus = seq[(idx + 1) % seq.length];
-            saveState();
-            renderHUD();
+            char.aboStatus = seq[(seq.indexOf(char.aboStatus) + 1) % seq.length];
+            saveState(); renderHUD();
         });
     });
 }
-
 
 
 function renderNPCTab() {
