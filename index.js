@@ -567,18 +567,22 @@ function renderCharPanel(char) {
     // ── Equipment ──────────────────────────────────────────────────────
     const eid = `equip-${cid.replace(/\W/g,'_')}`;
     const TIERS = ['Common','Uncommon','Rare','Epic','Legendary','Unique'];
+    const TIER_COLORS = { Common:'#9d9d9d', Uncommon:'#1eff00', Rare:'#0070dd', Epic:'#a335ee', Legendary:'#ff8000', Unique:'#e6cc80' };
     html += `<div class="el-section el-collapse" data-target="${eid}">
         <div class="el-sec-title el-toggle">EQUIPMENT <span class="el-arrow">▼</span></div>
         <div class="el-collapse-body collapsed" id="${eid}">
             <div class="el-equip-grid">
                 ${EQUIP_SLOTS.map(slot => {
                     const item = char.equipment?.[slot];
+                    const tc   = item ? (TIER_COLORS[item.tier] || TIER_COLORS.Common) : 'var(--el-border)';
                     const tierOpts = TIERS.map(t=>`<option value="${t}" ${item?.tier===t?'selected':''}>${t}</option>`).join('');
-                    return `<div class="el-equip-slot${item?' filled':''}">
-                        <span class="el-slot-label">${SLOT_LABELS[slot]}</span>
-                        <select class="el-mini-sel el-tier-sel" data-cid="${cid}" data-f="equip.tier.${slot}">${tierOpts}</select>
-                        <span class="el-editable el-slot-name" data-cid="${cid}" data-f="equip.name.${slot}" contenteditable="true">${item?.name||''}</span>
-                        ${item ? `<button class="el-rm-btn" data-cid="${cid}" data-f="equip.clear.${slot}" title="Clear slot">✕</button>` : ''}
+                    return `<div class="el-equip-slot${item?' filled':''}" style="--tc:${tc};border-left-color:${tc}">
+                        <div class="el-equip-slot-top">
+                            <span class="el-slot-label">${SLOT_LABELS[slot]}</span>
+                            ${item ? `<select class="el-inv-tier-badge" data-cid="${cid}" data-f="equip.tier.${slot}" style="color:${tc};border-color:${tc}40">${tierOpts}</select>` : ''}
+                            ${item ? `<button class="el-rm-btn" data-cid="${cid}" data-f="equip.clear.${slot}" title="Clear slot">✕</button>` : ''}
+                        </div>
+                        <span class="el-editable el-slot-name" data-cid="${cid}" data-f="equip.name.${slot}" contenteditable="true" style="${item ? `color:${tc}` : ''}">${item?.name ? escapeHtml(item.name) : '<span style="opacity:0.3">empty</span>'}</span>
                     </div>`;
                 }).join('')}
             </div>
@@ -587,17 +591,13 @@ function renderCharPanel(char) {
 
     // ── Inventory ──────────────────────────────────────────────────────
     const iid = `inv-${cid.replace(/\W/g,'_')}`;
-    const TIER_COLORS = { Common:'#9d9d9d', Uncommon:'#1eff00', Rare:'#0070dd', Epic:'#a335ee', Legendary:'#ff8000', Unique:'#e6cc80' };
     html += `<div class="el-section el-collapse" data-target="${iid}">
         <div class="el-sec-title el-toggle">INVENTORY <span class="el-arrow">▼</span>
             <span class="el-mesos-row">◎ <input class="el-vi el-mesos-input" type="number" data-cid="${cid}" data-f="mesos" value="${char.mesos||0}" min="0"/></span>
         </div>
         <div class="el-collapse-body collapsed" id="${iid}">
-            ${(char.inventory||[]).map((item,i) => {
-                const tc     = TIER_COLORS[item.tier] || TIER_COLORS.Common;
-                const tierOpts = TIERS.map(t=>`<option value="${t}" ${item.tier===t?'selected':''}>${t}</option>`).join('');
-                return `<div class="el-inv-card" style="--tc:${tc}">
-                    <select class="el-inv-tier-badge" data-cid="${cid}" data-f="inv.tier.${i}" title="${item.tier||'Common'}" style="color:${tc};border-color:${tc}40">${tierOpts}</select>
+            ${(char.inventory||[]).map((item,i) => `
+                <div class="el-inv-row">
                     <span class="el-editable el-inv-name" data-cid="${cid}" data-f="inv.name.${i}" contenteditable="true">${escapeHtml(item.name)}</span>
                     <div class="el-pm-btns">
                         <button class="el-pm-btn small" data-cid="${cid}" data-f="inv.qty.${i}" data-d="-1">−</button>
@@ -605,8 +605,7 @@ function renderCharPanel(char) {
                         <button class="el-pm-btn small" data-cid="${cid}" data-f="inv.qty.${i}" data-d="1">+</button>
                     </div>
                     <button class="el-rm-btn" data-cid="${cid}" data-f="inv.remove.${i}" title="Remove">✕</button>
-                </div>`;
-            }).join('')}
+                </div>`).join('')}
             ${(char.inventory||[]).length === 0 ? '<div class="el-empty">Empty</div>' : ''}
             <button class="el-btn small el-add-btn" data-cid="${cid}" data-f="inv.add">+ Add Item</button>
         </div>
