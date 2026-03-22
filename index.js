@@ -511,15 +511,19 @@ function renderCharPanel(char) {
     </div>`;
 
     // ── Disciplines ────────────────────────────────────────────────────
+    const DISC_ICONS = { Combat:'⚔', Crafting:'⚒', Magic:'✦', Trade:'⚖', Gathering:'⛏' };
     html += `<div class="el-section">
         <div class="el-sec-title">DISCIPLINES</div>
         ${DISCIPLINES.map(d => {
-            const data = char.disciplines?.[d] || {xp:0,level:1};
+            const data   = char.disciplines?.[d] || {xp:0,level:1};
             const toNext = Math.max(1, Math.round(100*Math.pow(data.level,1.5)));
-            const pct = Math.min(100, Math.round(((data.xp%toNext)/toNext)*100));
-            return `<div class="el-disc-row">
-                <span class="el-disc-name">${d}</span>
-                <div class="el-bar-track slim"><div class="el-bar-fill el-xp" style="width:${pct}%"></div></div>
+            const pct    = Math.min(100, Math.round(((data.xp%toNext)/toNext)*100));
+            return `<div class="el-disc-card">
+                <div class="el-disc-icon">${DISC_ICONS[d]||'◆'}</div>
+                <div class="el-disc-info">
+                    <div class="el-disc-label">${d}</div>
+                    <div class="el-bar-track slim"><div class="el-bar-fill el-xp" style="width:${pct}%"></div></div>
+                </div>
                 <div class="el-pm-btns">
                     <button class="el-pm-btn small" data-cid="${cid}" data-f="disc.${d}" data-d="-1">−</button>
                     <span class="el-disc-lvl">Lv.${data.level}</span>
@@ -583,19 +587,21 @@ function renderCharPanel(char) {
 
     // ── Inventory ──────────────────────────────────────────────────────
     const iid = `inv-${cid.replace(/\W/g,'_')}`;
+    const TIER_COLORS = { Common:'#9d9d9d', Uncommon:'#1eff00', Rare:'#0070dd', Epic:'#a335ee', Legendary:'#ff8000', Unique:'#e6cc80' };
     html += `<div class="el-section el-collapse" data-target="${iid}">
         <div class="el-sec-title el-toggle">INVENTORY <span class="el-arrow">▼</span>
             <span class="el-mesos-row">◎ <input class="el-vi el-mesos-input" type="number" data-cid="${cid}" data-f="mesos" value="${char.mesos||0}" min="0"/></span>
         </div>
         <div class="el-collapse-body collapsed" id="${iid}">
             ${(char.inventory||[]).map((item,i) => {
+                const tc     = TIER_COLORS[item.tier] || TIER_COLORS.Common;
                 const tierOpts = TIERS.map(t=>`<option value="${t}" ${item.tier===t?'selected':''}>${t}</option>`).join('');
-                return `<div class="el-inv-edit-row">
-                    <select class="el-mini-sel el-tier-sel" data-cid="${cid}" data-f="inv.tier.${i}">${tierOpts}</select>
+                return `<div class="el-inv-card" style="--tc:${tc}">
+                    <select class="el-inv-tier-badge" data-cid="${cid}" data-f="inv.tier.${i}" title="${item.tier||'Common'}" style="color:${tc};border-color:${tc}40">${tierOpts}</select>
                     <span class="el-editable el-inv-name" data-cid="${cid}" data-f="inv.name.${i}" contenteditable="true">${escapeHtml(item.name)}</span>
                     <div class="el-pm-btns">
                         <button class="el-pm-btn small" data-cid="${cid}" data-f="inv.qty.${i}" data-d="-1">−</button>
-                        <span class="el-disc-lvl">×${item.quantity||1}</span>
+                        <span class="el-inv-qty">×${item.quantity||1}</span>
                         <button class="el-pm-btn small" data-cid="${cid}" data-f="inv.qty.${i}" data-d="1">+</button>
                     </div>
                     <button class="el-rm-btn" data-cid="${cid}" data-f="inv.remove.${i}" title="Remove">✕</button>
