@@ -1551,6 +1551,13 @@ function createOrb() {
     if (document.getElementById('el-orb')) return;
     dbg('createOrb — building orb');
 
+    // ── Diagnose stacking context traps ──────────────────────────────
+    const bodyStyle = window.getComputedStyle(document.body);
+    const traps = ['transform', 'filter', 'backdropFilter', 'webkitBackdropFilter', 'willChange', 'perspective']
+        .filter(p => { const v = bodyStyle[p]; return v && v !== 'none' && v !== 'auto'; });
+    if (traps.length) dbg(`⚠ body has stacking-context traps: ${traps.join(', ')} — fixed positioning may break`);
+    else dbg('body stacking context: clean');
+
     const orb = document.createElement('div');
     orb.id    = 'el-orb';
     orb.innerHTML = '<span style="pointer-events:none;font-size:20px;color:#fff;">EL</span>';
@@ -1574,35 +1581,89 @@ function createOrb() {
         userSelect:     'none',
         touchAction:    'none',
         webkitTapHighlightColor: 'transparent',
-        left:           '16px',
-        bottom:         '100px',
         right:          'auto',
         top:            'auto',
     });
 
-    document.body.appendChild(orb);
-    dbg('createOrb — orb appended to body');
+    // ── Clear stale desktop position immediately ─────────────────────
+    localStorage.removeItem('el_orb_left');
+    localStorage.removeItem('el_orb_bottom');
+    // Always start at a known-safe position in center-bottom area
+    orb.style.left   = '16px';
+    orb.style.bottom = '160px';  // higher up — clear ST's bottom toolbar
 
-    // ── Restore saved position, then clamp to viewport ─────────────
-    const savedLeft   = localStorage.getItem('el_orb_left');
-    const savedBottom = localStorage.getItem('el_orb_bottom');
-    if (savedLeft)   orb.style.left   = savedLeft;
-    if (savedBottom) orb.style.bottom = savedBottom;
+    // ── Append to documentElement (not body) to escape stacking context traps ──
+    document.documentElement.appendChild(orb);
+    dbg('createOrb — orb appended to <html> (documentElement)');
 
-    // Clamp to current viewport (desktop position may be offscreen on mobile)
+    // Log actual rendered position after paint
     requestAnimationFrame(() => {
         const rect = orb.getBoundingClientRect();
-        const vw   = window.innerWidth;
-        const vh   = window.innerHeight;
-        if (rect.right < 10 || rect.left > vw - 10 || rect.top > vh - 10 || rect.bottom < 10) {
-            dbg('createOrb — saved position offscreen, resetting');
-            orb.style.left   = '16px';
-            orb.style.bottom = '100px';
-            orb.style.right  = 'auto';
-            localStorage.removeItem('el_orb_left');
-            localStorage.removeItem('el_orb_bottom');
+        dbg(`  orb post-paint rect: L${Math.round(rect.left)} T${Math.round(rect.top)} W${Math.round(rect.width)} H${Math.round(rect.height)}`);
+        const vw = window.innerWidth, vh = window.innerHeight;
+        dbg(`  viewport: ${vw}×${vh} — orb should be visible at bottom-left`);
+
+        // If STILL offscreen somehow, force to center of screen as nuclear option
+        if (rect.width === 0 || rect.height === 0 || rect.right < 0 || rect.left > vw || rect.top > vh || rect.bottom < 0) {
+            dbg('  ⚠ orb STILL offscreen — forcing to center');
+            orb.style.left   = `${Math.round(vw / 2 - 32)}px`;
+            orb.style.top    = `${Math.round(vh / 2 - 32)}px`;
+            orb.style.bottom = 'auto';
         }
     });
+
+    // ── Drag logic ────────────────────────────────────────────────────
+    let startX, startY, startLeft, startBottom, dragged = false;
+
+    function onMove(e) {
+        e.preventDefault(); // prevent page scroll while dragging orb
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+        if (Math.abs(dx) + Math.abs(dy) > 5) dragged = true;
+        const newLeft   = Math.max(0, Math.min(window.innerWidth  - orb.offsetWidth,  startLeft   + dx));
+        const newBottom = Math.max(0, Math.min(window.innerHeight - orb.offsetHeight, startBottom - dy));
+        orb.style.left   = newLeft   + 'px';
+        orb.style.bottom = newBottom + 'px';
+        orb.style.right  = 'auto';
+    }
+
+    function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend',  onUp);
+        // Save position
+        localStorage.setItem('el_orb_left',   orb.style.left);
+        localStorage.setItem('el_orb_bottom', orb.style.bottom);
+    }
+
+    orb.addEventListener('mousedown', e => {
+        dragged = false;
+        startX      = e.clientX;
+        startY      = e.clientY;
+        startLeft   = orb.offsetLeft;
+        startBottom = window.innerHeight - orb.offsetTop - orb.offsetHeight;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup',   onUp);
+        e.preventDefault();
+    });
+
+    orb.addEventListener('touchstart', e => {
+        dragged = false;
+        startX      = e.touches[0].clientX;
+        startY      = e.touches[0].clientY;
+        startLeft   = orb.offsetLeft;
+        startBottom = window.innerHeight - orb.offsetTop - orb.offsetHeight;
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('touchend',  onUp);
+    }, { passive: true });
+
+    orb.addEventListener('click', () => {
+        if (!dragged) toggleMobilePanel();
+    });
+}
 
     // ── Drag logic ────────────────────────────────────────────────────
     let startX, startY, startLeft, startBottom, dragged = false;
