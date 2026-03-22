@@ -1544,17 +1544,80 @@ function bindTabs(hud) {
 function createOrb() {
     if (document.getElementById('el-orb')) return;
     const orb = document.createElement('div');
-    orb.id          = 'el-orb';
-    orb.textContent = '◈';
-    orb.title       = 'Ellinia Tracker';
-    orb.addEventListener('click', () => toggleMobilePanel());
+    orb.id    = 'el-orb';
+    orb.innerHTML = '<span class="el-orb-glyph">◈</span>';
+    orb.title = 'Ellinia Tracker';
     document.body.appendChild(orb);
+
+    // ── Drag logic ────────────────────────────────────────────────────
+    let startX, startY, startLeft, startBottom, dragged = false;
+
+    function onMove(e) {
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+        if (Math.abs(dx) + Math.abs(dy) > 5) dragged = true;
+        const newLeft   = Math.max(0, Math.min(window.innerWidth  - orb.offsetWidth,  startLeft   + dx));
+        const newBottom = Math.max(0, Math.min(window.innerHeight - orb.offsetHeight, startBottom - dy));
+        orb.style.left   = newLeft   + 'px';
+        orb.style.bottom = newBottom + 'px';
+        orb.style.right  = 'auto';
+    }
+
+    function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend',  onUp);
+        // Save position
+        localStorage.setItem('el_orb_left',   orb.style.left);
+        localStorage.setItem('el_orb_bottom', orb.style.bottom);
+    }
+
+    orb.addEventListener('mousedown', e => {
+        dragged = false;
+        startX      = e.clientX;
+        startY      = e.clientY;
+        startLeft   = orb.offsetLeft;
+        startBottom = window.innerHeight - orb.offsetTop - orb.offsetHeight;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup',   onUp);
+        e.preventDefault();
+    });
+
+    orb.addEventListener('touchstart', e => {
+        dragged = false;
+        startX      = e.touches[0].clientX;
+        startY      = e.touches[0].clientY;
+        startLeft   = orb.offsetLeft;
+        startBottom = window.innerHeight - orb.offsetTop - orb.offsetHeight;
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('touchend',  onUp);
+    }, { passive: true });
+
+    orb.addEventListener('click', () => {
+        if (!dragged) toggleMobilePanel();
+    });
+
+    // Restore saved position
+    const savedLeft   = localStorage.getItem('el_orb_left');
+    const savedBottom = localStorage.getItem('el_orb_bottom');
+    if (savedLeft && savedBottom) {
+        orb.style.left   = savedLeft;
+        orb.style.bottom = savedBottom;
+        orb.style.right  = 'auto';
+    }
 }
 
 function toggleMobilePanel() {
     const hud = document.getElementById('el-hud');
     if (!hud) return;
-    hud.classList.toggle('el-mobile-open');
+    const isOpen = hud.classList.toggle('el-mobile-open');
+    // Close button inside HUD
+    hud.querySelector('#el-close-btn')?.addEventListener('click', () => {
+        hud.classList.remove('el-mobile-open');
+    }, { once: true });
 }
 
 // ─── HUD CREATION ─────────────────────────────────────────────────────────────
