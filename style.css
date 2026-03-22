@@ -652,3 +652,41 @@
     letter-spacing: 0.05em;
     text-align: center;
 }
+
+/* ─── PLAYER SWITCHER ───────────────────────────────────────────── */
+
+.el-player-switcher {
+    display: flex;
+    gap: 1.5em;
+    padding: 0.75em 1em 0.5em;
+    border-bottom: 1px solid color-mix(in srgb, var(--el-gold) 20%, transparent);
+    margin-bottom: 0.25em;
+}
+
+.el-psw-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3em;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    opacity: 0.45;
+}
+
+.el-psw-wrap:hover  { opacity: 0.75; }
+.el-psw-wrap.active { opacity: 1; }
+
+.el-psw-avatar {
+    width:  clamp(52px, 7vw, 64px);
+    height: clamp(52px, 7vw, 64px);
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--el-border);
+    background: var(--el-accent);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.el-psw-wrap.active .el-psw-avatar {
+    border-color: var(--el-gold);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--el-gold) 40%, transparent);
+}
