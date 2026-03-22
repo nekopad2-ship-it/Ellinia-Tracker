@@ -988,8 +988,10 @@ function elLog(msg) {
     const ts = new Date().toLocaleTimeString();
     _elLog.unshift(`[${ts}] ${msg}`);
     if (_elLog.length > MAX_LOG) _elLog.pop();
+    // Update whenever the element is present (CONFIG tab may not be active)
     const el = document.getElementById('el-debug-log');
     if (el) el.innerHTML = _elLog.map(l => `<div class="el-log-line">${l}</div>`).join('');
+    console.debug('[EL]', msg);
 }
 
 // ─── PARSE TRIGGER ────────────────────────────────────────────────────────────
