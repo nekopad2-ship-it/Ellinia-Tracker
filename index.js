@@ -224,6 +224,7 @@ function initSettings() {
 
 function saveState() {
     extension_settings[EXT_NAME] = settings;
+    settings = extension_settings[EXT_NAME];
     saveSettingsDebounced();
 }
 
@@ -725,8 +726,10 @@ function findProfileById(id) {
 
 function getPresetNames() {
     try {
-        const pm = SillyTavern.getContext().getPresetManager?.();
-        return pm?.getPresetList?.() ?? [];
+        // Non-bundled extension: read preset names directly from the select element ST maintains
+        const sel = document.querySelector('#settings_preset') ?? document.querySelector('#chat_completion_preset');
+        if (!sel) return [];
+        return Array.from(sel.options).map(o => o.value).filter(v => v);
     } catch {
         return [];
     }
