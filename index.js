@@ -306,8 +306,8 @@ function totalLevel(char) {
 function getCharAvatar(char) {
     try {
         if (char.isPlayer) {
-            const ctx = getContext();
-            const av  = ctx.user_avatar || user_avatar;
+            // user_avatar is the module-level var from script.js — most reliable source
+            const av = user_avatar || getContext().settings?.user_avatar;
             if (av) return getThumbnailUrl('avatar', av);
             return null;
         } else {
