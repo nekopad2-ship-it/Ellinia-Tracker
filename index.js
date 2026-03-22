@@ -283,7 +283,7 @@ function totalLevel(char) {
 // ─── CHARACTER PANEL RENDERER ─────────────────────────────────────────────────
 
 function renderCharPanel(char) {
-    const capped  = SOFT_CAPS[char.classRank] || 20;
+    const capped  = 20;
     const cid     = char.isPlayer ? '__player__' : char.name;
     const aboIcon = ABO_ICONS[char.aboGender] || '◇';
     const aboColor = STATUS_COLORS[char.aboStatus] || 'var(--el-text-dim)';
@@ -345,7 +345,7 @@ function renderCharPanel(char) {
 
     // ── Stats ─────────────────────────────────────────────────────────
     html += `<div class="el-section">
-        <div class="el-sec-title">ATTRIBUTES <span class="el-cap-note">soft cap: ${capped}</span></div>
+        <div class="el-sec-title">ATTRIBUTES</div>
         <div class="el-stats-grid">
             ${STATS.map(s => {
                 const val = char.stats?.[s] || 0;
