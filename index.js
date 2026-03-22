@@ -800,6 +800,7 @@ async function directGenerate({ systemPrompt, userPrompt, maxTokens = 1200, temp
     }
 
     const model = profile.model;
+    console.log('[Ellinia Tracker] Sending to API:', { provider: profile.api, model, endpoint, systemPromptLength: systemPrompt?.length, userPromptLength: userPrompt?.length });
 
     try {
         if (info.format === 'anthropic') {
