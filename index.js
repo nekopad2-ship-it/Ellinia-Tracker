@@ -1100,11 +1100,20 @@ function createHUD() {
 
     document.body.appendChild(hud);
 
-    // Desktop collapse (slide sidebar off-screen)
-    hud.querySelector('#el-minimize-btn').addEventListener('click', () => {
+  // Create the persistent collapse tab
+    const tab = document.createElement('div');
+    tab.id = 'el-hud-tab';
+    tab.textContent = '›';
+    document.body.appendChild(tab);
+
+    const toggleCollapse = () => {
         const collapsed = hud.classList.toggle('el-collapsed');
-        hud.querySelector('#el-minimize-btn').textContent = collapsed ? '+' : '−';
-    });
+        tab.textContent = collapsed ? '‹' : '›';
+        tab.style.right = collapsed ? '0px' : 'var(--el-sidebar-w)';
+    };
+
+    hud.querySelector('#el-minimize-btn').addEventListener('click', toggleCollapse);
+    tab.addEventListener('click', toggleCollapse);
 
     // Mobile close button
     hud.querySelector('#el-close-btn')?.addEventListener('click', () => {
