@@ -47,10 +47,11 @@ const NPC_PRESETS = {
 
 // ─── DATA FACTORIES ───────────────────────────────────────────────────────────
 
-function makeCharacter(name = '', isPlayer = false, preset = {}) {
+function makeCharacter(name = '', isPlayer = false, preset = {}, isCharPlayer = false) {
     return {
         name,
         isPlayer,
+        isCharPlayer,
         class:          preset.class         || (isPlayer ? 'Blacksmith' : ''),
         classRank:      preset.classRank      || 'F',
         aboGender:      preset.aboGender      || 'Beta',
@@ -66,24 +67,26 @@ function makeCharacter(name = '', isPlayer = false, preset = {}) {
             Trade:     { xp: 0, level: 1 },
             Gathering: { xp: 0, level: 1 },
         },
-        skills:          [],
-        equipment:       { weapon: null, helm: null, chest: null, gloves: null, boots: null, accessory1: null, accessory2: null },
-        inventory:       [],
-        mesos:           0,
-        statusEffects:   [],
-        threadSightLevel: isPlayer ? 1 : 0,   // player-only Goddess skill
-        notes:           '',
+        skills:           [],
+        equipment:        { weapon: null, helm: null, chest: null, gloves: null, boots: null, accessory1: null, accessory2: null },
+        inventory:        [],
+        mesos:            0,
+        statusEffects:    [],
+        threadSightLevel: isPlayer ? 1 : 0,
+        greatSageLevel:   isCharPlayer ? 1 : 0,
+        notes:            '',
     };
 }
 
 const DEFAULT_SETTINGS = {
-    connectionProfile: '',   // ST connection profile ID for extraction
-    completionPreset:  '',   // ST completion preset name (informational only for direct calls)
+    connectionProfile: '',
+    completionPreset:  '',
     autoUpdate:        true,
     contextMessages:   3,
     state: {
-        player: null,
-        npcs:   {}
+        player:     null,
+        charPlayer: null,
+        npcs:       {}
     }
 };
 
@@ -202,9 +205,10 @@ Return ONLY the JSON array. No markdown fences, no explanation, no preamble.`;
 
 // ─── RUNTIME STATE ────────────────────────────────────────────────────────────
 
-let settings   = {};
-let isParsing  = false;
-let _abortCtrl = null;
+let settings          = {};
+let isParsing         = false;
+let _abortCtrl        = null;
+let _activePlayerView = 'user'; // 'user' | 'char'
 
 // ─── SETTINGS INIT ────────────────────────────────────────────────────────────
 
@@ -223,17 +227,23 @@ function initSettings() {
 
 // Load per-chat state from chat_metadata (called on init + CHAT_CHANGED)
 function loadChatState() {
-    const ctx = getContext();
+    const ctx        = getContext();
     const playerName = ctx.name1 || 'Player';
+    const charName   = ctx.name2 || 'Character';
+
     if (chat_metadata?.ellinia_state) {
         settings.state = chat_metadata.ellinia_state;
-        // Ensure player exists
-        if (!settings.state.player) settings.state.player = makeCharacter(playerName, true);
-        if (!settings.state.npcs)   settings.state.npcs   = {};
-        settings.state.player.isPlayer = true;
+        if (!settings.state.player)     settings.state.player     = makeCharacter(playerName, true, {}, false);
+        if (!settings.state.charPlayer) settings.state.charPlayer = makeCharacter(charName, false, {}, true);
+        if (!settings.state.npcs)       settings.state.npcs       = {};
+        settings.state.player.isPlayer         = true;
+        settings.state.charPlayer.isCharPlayer = true;
     } else {
-        // New chat — start fresh with player named after persona
-        settings.state = { player: makeCharacter(playerName, true), npcs: {} };
+        settings.state = {
+            player:     makeCharacter(playerName, true, {}, false),
+            charPlayer: makeCharacter(charName, false, {}, true),
+            npcs:       {}
+        };
     }
 }
 
@@ -300,6 +310,34 @@ function totalLevel(char) {
     return DISCIPLINES.reduce((s, d) => s + (char.disciplines?.[d]?.level || 0), 0);
 }
 
+// ─── PLAYER TAB RENDERER ──────────────────────────────────────────────────────
+
+function renderPlayerTab() {
+    const ctx        = getContext();
+    const userName   = ctx.name1 || '{{user}}';
+    const charName   = ctx.name2 || '{{char}}';
+    const userAvatar = getCharAvatar(settings.state.player);
+    const charAvatar = getCurrentCharAvatar();
+    const isUser     = _activePlayerView === 'user';
+    const activeChar = isUser ? settings.state.player : settings.state.charPlayer;
+
+    return `<div class="el-player-switcher">
+        <div class="el-psw-wrap ${isUser ? 'active' : ''}" data-view="user" title="Switch to ${userName}">
+            ${userAvatar
+                ? `<img class="el-avatar el-psw-avatar" src="${userAvatar}" alt="user" onerror="this.style.display='none'"/>`
+                : `<div class="el-avatar el-avatar-placeholder">U</div>`}
+            <span class="el-avatar-label">${userName}</span>
+        </div>
+        <div class="el-psw-wrap ${!isUser ? 'active' : ''}" data-view="char" title="Switch to ${charName}">
+            ${charAvatar
+                ? `<img class="el-avatar el-psw-avatar" src="${charAvatar}" alt="char" onerror="this.style.display='none'"/>`
+                : `<div class="el-avatar el-avatar-placeholder">C</div>`}
+            <span class="el-avatar-label">${charName}</span>
+        </div>
+    </div>
+    ${renderCharPanel(activeChar)}`;
+}
+
 // ─── CHARACTER PANEL RENDERER ─────────────────────────────────────────────────
 
 
@@ -329,9 +367,9 @@ function getCurrentCharAvatar() {
 }
 
 function renderCharPanel(char) {
-    const capped  = 20;
-    const cid     = char.isPlayer ? '__player__' : char.name;
-    const aboIcon = ABO_ICONS[char.aboGender] || '◇';
+    const capped   = 20;
+    const cid      = char.isPlayer ? '__player__' : char.isCharPlayer ? '__char__' : char.name;
+    const aboIcon  = ABO_ICONS[char.aboGender] || '◇';
     const aboColor = STATUS_COLORS[char.aboStatus] || 'var(--el-text-dim)';
     const statusTag = char.aboStatus !== 'neutral'
         ? `<span class="el-abo-active" style="color:${aboColor}">[${char.aboStatus.toUpperCase()}]</span>` : '';
@@ -340,31 +378,7 @@ function renderCharPanel(char) {
         `<option value="${r}" ${char.adventurerRank === r ? 'selected' : ''}>${r}</option>`).join('');
 
     // ── Identity ──────────────────────────────────────────────────────
-    let avatarBlock = '';
-    if (char.isPlayer) {
-        const userAvatar = getCharAvatar(char);
-        const charAvatar = getCurrentCharAvatar();
-        const ctx        = getContext();
-        const userName   = ctx.name1 || '{{user}}';
-        const charName   = ctx.name2 || '{{char}}';
-        avatarBlock = `<div class="el-avatar-row">
-            <div class="el-avatar-wrap" title="${userName}">
-                ${userAvatar
-                    ? `<img class="el-avatar" src="${userAvatar}" alt="user" onerror="this.style.display='none'"/>`
-                    : `<div class="el-avatar el-avatar-placeholder">U</div>`}
-                <span class="el-avatar-label">${userName}</span>
-            </div>
-            <div class="el-avatar-wrap" title="${charName}">
-                ${charAvatar
-                    ? `<img class="el-avatar" src="${charAvatar}" alt="char" onerror="this.style.display='none'"/>`
-                    : `<div class="el-avatar el-avatar-placeholder">C</div>`}
-                <span class="el-avatar-label">${charName}</span>
-            </div>
-        </div>`;
-    }
-
     let html = `<div class="el-identity">
-        ${avatarBlock}
         <div class="el-editable el-ident-name" data-cid="${cid}" data-f="name" contenteditable="true">${char.name || '—'}</div>
         <div class="el-ident-row">
             <span class="el-ident-label">Class:</span>
@@ -380,8 +394,8 @@ function renderCharPanel(char) {
     </div>`;
 
     // ── HP / MP ───────────────────────────────────────────────────────
-    const hpPct  = char.hp.max > 0 ? Math.min(100, Math.round((char.hp.current / char.hp.max) * 100)) : 0;
-    const mpPct  = char.mana.max > 0 ? Math.min(100, Math.round((char.mana.current / char.mana.max) * 100)) : 0;
+    const hpPct = char.hp.max > 0 ? Math.min(100, Math.round((char.hp.current / char.hp.max) * 100)) : 0;
+    const mpPct = char.mana.max > 0 ? Math.min(100, Math.round((char.mana.current / char.mana.max) * 100)) : 0;
     html += `<div class="el-section">
         <div class="el-bar-row">
             <span class="el-bar-label">HP</span>
@@ -395,7 +409,7 @@ function renderCharPanel(char) {
         </div>
     </div>`;
 
-    // ── Thread Sight (player only) ────────────────────────────────────
+    // ── Thread Sight ({{user}} only) ─────────────────────────────────
     if (char.isPlayer) {
         const tsl = char.threadSightLevel || 0;
         const tsd = ['—','Common legible','Uncommon legible','Rare legible + mana read','Weak point detection','Epic legible + full HUD'][tsl] || '?';
@@ -410,6 +424,24 @@ function renderCharPanel(char) {
                 </div>
             </div>
             <div class="el-ts-desc-line">${tsd}</div>
+        </div>`;
+    }
+
+    // ── Great Sage ({{char}} only) ────────────────────────────────────
+    if (char.isCharPlayer) {
+        const gsl = char.greatSageLevel || 0;
+        const gsd = ['—','Basic analysis','Combat threat alerts','Structural weakness detection','Tactical recommendations','Full battlefield omniscience'][gsl] || '?';
+        html += `<div class="el-section el-ts-section">
+            <div class="el-sec-title">❋ GREAT SAGE</div>
+            <div class="el-ts-row">
+                ${[1,2,3,4,5].map(i=>`<div class="el-ts-pip${i<=gsl?' active':''}" title="Level ${i}"></div>`).join('')}
+                <span class="el-ts-desc" style="color:var(--el-text)">Lv.${gsl}</span>
+                <div class="el-pm-btns" style="margin-left:auto">
+                    <button class="el-pm-btn" data-cid="${cid}" data-f="greatSageLevel" data-d="-1">−</button>
+                    <button class="el-pm-btn" data-cid="${cid}" data-f="greatSageLevel" data-d="1">+</button>
+                </div>
+            </div>
+            <div class="el-ts-desc-line">${gsd}</div>
         </div>`;
     }
 
@@ -555,6 +587,7 @@ function renderCharPanel(char) {
 
 function getCharByKey(cid) {
     if (cid === '__player__') return settings.state.player;
+    if (cid === '__char__')   return settings.state.charPlayer;
     return settings.state.npcs[cid] || null;
 }
 
@@ -573,6 +606,7 @@ function initEditDelegation(hud) {
             if      (f.startsWith('stats.'))      { const s = f.slice(6); char.stats[s] = Math.max(0,(char.stats[s]||0)+delta); }
             else if (f.startsWith('disc.'))       { const d = f.slice(5); if (char.disciplines?.[d]) char.disciplines[d].level = Math.max(1,(char.disciplines[d].level||1)+delta); }
             else if (f === 'threadSightLevel')    { char.threadSightLevel = Math.max(0,Math.min(5,(char.threadSightLevel||0)+delta)); }
+            else if (f === 'greatSageLevel')      { char.greatSageLevel   = Math.max(0,Math.min(5,(char.greatSageLevel||0)+delta)); }
             else if (f.startsWith('skill.level.')){ const i=parseInt(f.split('.')[2]); if(char.skills?.[i]) char.skills[i].level=Math.max(1,(char.skills[i].level||1)+delta); }
             else if (f.startsWith('inv.qty.'))    { const i=parseInt(f.split('.')[2]); if(char.inventory?.[i]) char.inventory[i].quantity=Math.max(1,(char.inventory[i].quantity||1)+delta); }
             else if (f.startsWith('fx.dur.'))     { const i=parseInt(f.split('.')[2]); if(char.statusEffects?.[i]) char.statusEffects[i].duration=Math.max(1,(char.statusEffects[i].duration??1)+delta); }
@@ -603,6 +637,9 @@ function initEditDelegation(hud) {
             else if (f==='fx.add')    { if(!char.statusEffects)char.statusEffects=[]; char.statusEffects.push({name:'New Effect',duration:1,effect:''}); }
             saveState(); renderHUD(); return;
         }
+
+        const pswWrap = e.target.closest('.el-psw-wrap[data-view]');
+        if (pswWrap) { _activePlayerView = pswWrap.dataset.view; renderHUD(); return; }
 
         const aboCycle = e.target.closest('.el-abo-cycle[data-cid]');
         if (aboCycle) {
@@ -810,7 +847,7 @@ function renderHUD() {
     const npcTab      = hud.querySelector('#el-tab-npcs');
     const settingsTab = hud.querySelector('#el-tab-settings');
 
-    if (playerTab)   playerTab.innerHTML   = renderCharPanel(settings.state.player);
+    if (playerTab)   playerTab.innerHTML   = renderPlayerTab();
     if (npcTab)      npcTab.innerHTML      = renderNPCTab();
     if (settingsTab) settingsTab.innerHTML = renderSettingsTab();
 
@@ -1285,12 +1322,30 @@ async function parseLastMessages() {
         let changed = 0;
         for (const upd of updates) {
             if (!upd.character || !upd.updates) continue;
-            if (upd.character === 'player') {
+            const charKey    = upd.character.toLowerCase().trim();
+            const ctx        = getContext();
+            const playerName = (ctx.name1 || settings.state.player.name || '').toLowerCase().trim();
+            const charName   = (ctx.name2 || settings.state.charPlayer?.name || '').toLowerCase().trim();
+
+            if (charKey === 'player' || charKey === playerName || charKey === '{{user}}') {
                 applyUpdates(settings.state.player, upd.updates);
                 changed++;
-            } else if (settings.state.npcs[upd.character]) {
-                applyUpdates(settings.state.npcs[upd.character], upd.updates);
+                elLog(`✓ Updated {{user}}: "${upd.character}"`);
+            } else if (charKey === charName || charKey === '{{char}}') {
+                applyUpdates(settings.state.charPlayer, upd.updates);
                 changed++;
+                elLog(`✓ Updated {{char}}: "${upd.character}"`);
+            } else {
+                const npcKey = Object.keys(settings.state.npcs).find(
+                    k => k.toLowerCase().trim() === charKey
+                );
+                if (npcKey) {
+                    applyUpdates(settings.state.npcs[npcKey], upd.updates);
+                    changed++;
+                    elLog(`✓ Updated NPC: ${npcKey}`);
+                } else {
+                    elLog(`⚠ No match for: "${upd.character}"`);
+                }
             }
         }
 
