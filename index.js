@@ -1716,7 +1716,6 @@ function createOrb() {
     orb.addEventListener('click', () => {
         if (!dragged) toggleMobilePanel();
     });
-}
 
 function toggleMobilePanel() {
     const hud = document.getElementById('el-hud');
