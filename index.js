@@ -480,159 +480,130 @@ function renderCharPanel(char) {
     return html;
 }
 
-// ─── EDIT EVENT BINDING ───────────────────────────────────────────────────────
+// ─── EDIT EVENT DELEGATION ────────────────────────────────────────────────────
+// One delegated listener on the permanent HUD root — survives all innerHTML rerenders
 
 function getCharByKey(cid) {
     if (cid === '__player__') return settings.state.player;
     return settings.state.npcs[cid] || null;
 }
 
-function bindEditEvents(root) {
+function initEditDelegation(hud) {
 
-    // ── +/- buttons ───────────────────────────────────────────────────
-    root.querySelectorAll('.el-pm-btn').forEach(btn => {
-        btn.addEventListener('click', e => {
+    // ── Click: +/- buttons, remove, add, ABO cycle ────────────────────
+    hud.addEventListener('click', e => {
+
+        const pmBtn = e.target.closest('.el-pm-btn[data-cid]');
+        if (pmBtn) {
             e.stopPropagation();
-            const cid   = btn.dataset.cid;
-            const f     = btn.dataset.f;
-            const delta = parseInt(btn.dataset.d);
-            const char  = getCharByKey(cid);
+            const char  = getCharByKey(pmBtn.dataset.cid);
+            const f     = pmBtn.dataset.f;
+            const delta = parseInt(pmBtn.dataset.d);
             if (!char || isNaN(delta)) return;
+            if      (f.startsWith('stats.'))      { const s = f.slice(6); char.stats[s] = Math.max(0,(char.stats[s]||0)+delta); }
+            else if (f.startsWith('disc.'))       { const d = f.slice(5); if (char.disciplines?.[d]) char.disciplines[d].level = Math.max(1,(char.disciplines[d].level||1)+delta); }
+            else if (f === 'threadSightLevel')    { char.threadSightLevel = Math.max(0,Math.min(5,(char.threadSightLevel||0)+delta)); }
+            else if (f.startsWith('skill.level.')){ const i=parseInt(f.split('.')[2]); if(char.skills?.[i]) char.skills[i].level=Math.max(1,(char.skills[i].level||1)+delta); }
+            else if (f.startsWith('inv.qty.'))    { const i=parseInt(f.split('.')[2]); if(char.inventory?.[i]){char.inventory[i].quantity=Math.max(0,(char.inventory[i].quantity||1)+delta); if(char.inventory[i].quantity===0)char.inventory.splice(i,1);} }
+            else if (f.startsWith('fx.dur.'))     { const i=parseInt(f.split('.')[2]); if(char.statusEffects?.[i]) char.statusEffects[i].duration=Math.max(0,(char.statusEffects[i].duration??0)+delta); }
+            saveState(); renderHUD(); return;
+        }
 
-            if (f.startsWith('stats.')) {
-                const s = f.slice(6); char.stats[s] = Math.max(0, (char.stats[s]||0) + delta);
-            } else if (f.startsWith('disc.')) {
-                const d = f.slice(5);
-                if (char.disciplines?.[d]) char.disciplines[d].level = Math.max(1, (char.disciplines[d].level||1) + delta);
-            } else if (f === 'threadSightLevel') {
-                char.threadSightLevel = Math.max(0, Math.min(5, (char.threadSightLevel||0) + delta));
-            } else if (f.startsWith('skill.level.')) {
-                const i = parseInt(f.split('.')[2]);
-                if (char.skills?.[i]) char.skills[i].level = Math.max(1, (char.skills[i].level||1) + delta);
-            } else if (f.startsWith('inv.qty.')) {
-                const i = parseInt(f.split('.')[2]);
-                if (char.inventory?.[i]) {
-                    char.inventory[i].quantity = Math.max(0, (char.inventory[i].quantity||1) + delta);
-                    if (char.inventory[i].quantity === 0) char.inventory.splice(i, 1);
-                }
-            } else if (f.startsWith('fx.dur.')) {
-                const i = parseInt(f.split('.')[2]);
-                if (char.statusEffects?.[i]) {
-                    const cur = char.statusEffects[i].duration ?? 0;
-                    char.statusEffects[i].duration = Math.max(0, cur + delta);
-                }
-            }
-            saveState(); renderHUD();
-        });
-    });
-
-    // ── Number inputs (HP/MP/mesos) ───────────────────────────────────
-    root.querySelectorAll('.el-vi').forEach(input => {
-        const commit = () => {
-            const char = getCharByKey(input.dataset.cid);
+        const rmBtn = e.target.closest('.el-rm-btn[data-cid]');
+        if (rmBtn) {
+            e.stopPropagation();
+            const char = getCharByKey(rmBtn.dataset.cid);
+            const f    = rmBtn.dataset.f;
             if (!char) return;
-            const f = input.dataset.f;
-            const v = Number(input.value);
-            if (f === 'hp.current')   { char.hp.current   = Math.max(0, Math.min(v, char.hp.max)); }
-            else if (f === 'hp.max')  { char.hp.max = Math.max(1, v); char.hp.current = Math.min(char.hp.current, char.hp.max); }
-            else if (f === 'mana.current') { char.mana.current = Math.max(0, Math.min(v, char.mana.max)); }
-            else if (f === 'mana.max')     { char.mana.max = Math.max(1, v); char.mana.current = Math.min(char.mana.current, char.mana.max); }
-            else if (f === 'mesos')   { char.mesos = Math.max(0, v); }
-            saveState(); renderHUD();
-        };
-        input.addEventListener('change', commit);
-        input.addEventListener('keydown', e => { if (e.key === 'Enter') { commit(); e.target.blur(); } });
-        // prevent collapsible toggle from firing when clicking the input
-        input.addEventListener('click', e => e.stopPropagation());
-    });
+            if      (f.startsWith('skill.remove.')) char.skills.splice(parseInt(f.split('.')[2]),1);
+            else if (f.startsWith('inv.remove.'))   char.inventory.splice(parseInt(f.split('.')[2]),1);
+            else if (f.startsWith('equip.clear.'))  char.equipment[f.split('.')[2]] = null;
+            else if (f.startsWith('fx.remove.'))    char.statusEffects.splice(parseInt(f.split('.')[2]),1);
+            saveState(); renderHUD(); return;
+        }
 
-    // ── Contenteditable fields ────────────────────────────────────────
-    root.querySelectorAll('.el-editable[contenteditable]').forEach(el => {
-        el.addEventListener('blur', () => {
-            const char = getCharByKey(el.dataset.cid);
+        const addBtn = e.target.closest('.el-add-btn[data-cid]');
+        if (addBtn) {
+            e.stopPropagation();
+            const char = getCharByKey(addBtn.dataset.cid);
+            const f    = addBtn.dataset.f;
             if (!char) return;
-            const f   = el.dataset.f;
-            const val = el.innerText.trim();
-            if (f === 'name')  { char.name  = val; }
-            else if (f === 'class') { char.class = val; }
-            else if (f === 'notes') { char.notes = val; }
-            else if (f.startsWith('skill.name.'))  { const i = parseInt(f.split('.')[2]); if (char.skills?.[i]) char.skills[i].name = val; }
-            else if (f.startsWith('skill.desc.'))  { const i = parseInt(f.split('.')[2]); if (char.skills?.[i]) char.skills[i].description = val; }
-            else if (f.startsWith('equip.name.'))  { const slot = f.split('.')[2]; if (char.equipment) { if (!char.equipment[slot]) char.equipment[slot] = {name:'',tier:'Common'}; char.equipment[slot].name = val; if (!val) char.equipment[slot] = null; } }
-            else if (f.startsWith('inv.name.'))    { const i = parseInt(f.split('.')[2]); if (char.inventory?.[i]) char.inventory[i].name = val; }
-            else if (f.startsWith('fx.name.'))     { const i = parseInt(f.split('.')[2]); if (char.statusEffects?.[i]) char.statusEffects[i].name = val; }
-            else if (f.startsWith('fx.desc.'))     { const i = parseInt(f.split('.')[2]); if (char.statusEffects?.[i]) char.statusEffects[i].effect = val; }
-            saveState();
-        });
-        el.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); el.blur(); } });
+            if      (f==='skill.add') { if(!char.skills)char.skills=[]; char.skills.push({name:'New Skill',rank:'F',level:1,description:''}); }
+            else if (f==='inv.add')   { if(!char.inventory)char.inventory=[]; char.inventory.push({name:'New Item',tier:'Common',quantity:1}); }
+            else if (f==='fx.add')    { if(!char.statusEffects)char.statusEffects=[]; char.statusEffects.push({name:'New Effect',duration:1,effect:''}); }
+            saveState(); renderHUD(); return;
+        }
+
+        const aboCycle = e.target.closest('.el-abo-cycle[data-cid]');
+        if (aboCycle) {
+            e.stopPropagation();
+            const char = getCharByKey(aboCycle.dataset.cid);
+            if (!char) return;
+            const cycles = { Alpha:['neutral','rut'], Omega:['neutral','heat'], Beta:['neutral'] };
+            const seq = cycles[char.aboGender] || ['neutral'];
+            char.aboStatus = seq[(seq.indexOf(char.aboStatus)+1) % seq.length];
+            saveState(); renderHUD(); return;
+        }
     });
 
-    // ── Dropdowns (rank, tier) ────────────────────────────────────────
-    root.querySelectorAll('.el-rank-select, .el-mini-sel').forEach(sel => {
-        sel.addEventListener('change', e => {
+    // ── Change: selects + number inputs ──────────────────────────────
+    hud.addEventListener('change', e => {
+
+        const sel = e.target.closest('.el-rank-select[data-cid], .el-mini-sel[data-cid]');
+        if (sel) {
             e.stopPropagation();
             const char = getCharByKey(sel.dataset.cid);
+            const f=sel.dataset.f, v=sel.value;
             if (!char) return;
-            const f = sel.dataset.f;
-            const v = sel.value;
-            if (f === 'adventurerRank') { char.adventurerRank = v; }
-            else if (f.startsWith('skill.rank.'))  { const i = parseInt(f.split('.')[2]); if (char.skills?.[i]) char.skills[i].rank = v; }
-            else if (f.startsWith('equip.tier.'))  { const slot = f.split('.')[2]; if (char.equipment?.[slot]) char.equipment[slot].tier = v; }
-            else if (f.startsWith('inv.tier.'))    { const i = parseInt(f.split('.')[2]); if (char.inventory?.[i]) char.inventory[i].tier = v; }
-            saveState(); renderHUD();
-        });
-        sel.addEventListener('click', e => e.stopPropagation());
+            if      (f==='adventurerRank')          char.adventurerRank=v;
+            else if (f.startsWith('skill.rank.'))   { const i=parseInt(f.split('.')[2]); if(char.skills?.[i]) char.skills[i].rank=v; }
+            else if (f.startsWith('equip.tier.'))   { const slot=f.split('.')[2]; if(char.equipment?.[slot]) char.equipment[slot].tier=v; }
+            else if (f.startsWith('inv.tier.'))     { const i=parseInt(f.split('.')[2]); if(char.inventory?.[i]) char.inventory[i].tier=v; }
+            saveState(); renderHUD(); return;
+        }
+
+        const vi = e.target.closest('.el-vi[data-cid]');
+        if (vi) {
+            const char=getCharByKey(vi.dataset.cid), f=vi.dataset.f, v=Number(vi.value);
+            if (!char) return;
+            if      (f==='hp.current')   char.hp.current=Math.max(0,Math.min(v,char.hp.max));
+            else if (f==='hp.max')       { char.hp.max=Math.max(1,v); char.hp.current=Math.min(char.hp.current,char.hp.max); }
+            else if (f==='mana.current') char.mana.current=Math.max(0,Math.min(v,char.mana.max));
+            else if (f==='mana.max')     { char.mana.max=Math.max(1,v); char.mana.current=Math.min(char.mana.current,char.mana.max); }
+            else if (f==='mesos')        char.mesos=Math.max(0,v);
+            saveState(); renderHUD(); return;
+        }
     });
 
-    // ── Remove buttons ────────────────────────────────────────────────
-    root.querySelectorAll('.el-rm-btn').forEach(btn => {
-        btn.addEventListener('click', e => {
-            e.stopPropagation();
-            const char = getCharByKey(btn.dataset.cid);
-            if (!char) return;
-            const f = btn.dataset.f;
-            if (f.startsWith('skill.remove.'))  { char.skills.splice(parseInt(f.split('.')[2]), 1); }
-            else if (f.startsWith('inv.remove.'))    { char.inventory.splice(parseInt(f.split('.')[2]), 1); }
-            else if (f.startsWith('equip.clear.'))   { const slot = f.split('.')[2]; char.equipment[slot] = null; }
-            else if (f.startsWith('fx.remove.'))     { char.statusEffects.splice(parseInt(f.split('.')[2]), 1); }
-            saveState(); renderHUD();
-        });
+    // ── Focusout: contenteditable save ───────────────────────────────
+    hud.addEventListener('focusout', e => {
+        const el = e.target.closest('.el-editable[contenteditable][data-cid]');
+        if (!el) return;
+        const char=getCharByKey(el.dataset.cid), f=el.dataset.f, val=el.innerText.trim();
+        if (!char) return;
+        if      (f==='name')               char.name=val;
+        else if (f==='class')              char.class=val;
+        else if (f==='notes')              char.notes=val;
+        else if (f.startsWith('skill.name.')){ const i=parseInt(f.split('.')[2]); if(char.skills?.[i]) char.skills[i].name=val; }
+        else if (f.startsWith('skill.desc.')){ const i=parseInt(f.split('.')[2]); if(char.skills?.[i]) char.skills[i].description=val; }
+        else if (f.startsWith('equip.name.')){ const slot=f.split('.')[2]; if(char.equipment){ if(!char.equipment[slot]&&val) char.equipment[slot]={name:val,tier:'Common'}; else if(char.equipment[slot]){ char.equipment[slot].name=val; if(!val) char.equipment[slot]=null; } } }
+        else if (f.startsWith('inv.name.')) { const i=parseInt(f.split('.')[2]); if(char.inventory?.[i]) char.inventory[i].name=val; }
+        else if (f.startsWith('fx.name.'))  { const i=parseInt(f.split('.')[2]); if(char.statusEffects?.[i]) char.statusEffects[i].name=val; }
+        else if (f.startsWith('fx.desc.'))  { const i=parseInt(f.split('.')[2]); if(char.statusEffects?.[i]) char.statusEffects[i].effect=val; }
+        saveState();
     });
 
-    // ── Add buttons ───────────────────────────────────────────────────
-    root.querySelectorAll('.el-add-btn').forEach(btn => {
-        btn.addEventListener('click', e => {
-            e.stopPropagation();
-            const char = getCharByKey(btn.dataset.cid);
-            if (!char) return;
-            const f = btn.dataset.f;
-            if (f === 'skill.add') {
-                if (!char.skills) char.skills = [];
-                char.skills.push({ name: 'New Skill', rank: 'F', level: 1, description: '' });
-            } else if (f === 'inv.add') {
-                if (!char.inventory) char.inventory = [];
-                char.inventory.push({ name: 'New Item', tier: 'Common', quantity: 1 });
-            } else if (f === 'fx.add') {
-                if (!char.statusEffects) char.statusEffects = [];
-                char.statusEffects.push({ name: 'New Effect', duration: 1, effect: '' });
-            }
-            saveState(); renderHUD();
-        });
-    });
-
-    // ── ABO cycle ─────────────────────────────────────────────────────
-    root.querySelectorAll('.el-abo-cycle').forEach(el => {
-        el.addEventListener('click', e => {
-            e.stopPropagation();
-            const char = getCharByKey(el.dataset.cid);
-            if (!char) return;
-            const cycles = { Alpha: ['neutral','rut'], Omega: ['neutral','heat'], Beta: ['neutral'] };
-            const seq = cycles[char.aboGender] || ['neutral'];
-            char.aboStatus = seq[(seq.indexOf(char.aboStatus) + 1) % seq.length];
-            saveState(); renderHUD();
-        });
+    // ── Keydown: Enter blurs contenteditable ─────────────────────────
+    hud.addEventListener('keydown', e => {
+        if (e.key==='Enter' && !e.shiftKey) {
+            const el = e.target.closest('.el-editable[contenteditable]');
+            if (el) { e.preventDefault(); el.blur(); }
+        }
     });
 }
+
+// bindEditEvents kept as no-op — delegation handles everything now
+function bindEditEvents() {}
 
 
 function renderNPCTab() {
@@ -940,7 +911,8 @@ function findProfileById(id) {
 function getPresetNames() {
     try {
         const pm = SillyTavern.getContext().getPresetManager?.();
-        return pm?.getPresetList?.() ?? [];
+        const list = pm?.getPresetList?.() ?? [];
+        return Array.isArray(list) ? list : Object.keys(list || {});
     } catch {
         return [];
     }
@@ -1344,6 +1316,7 @@ function createHUD() {
 
     createOrb();
     bindTabs(hud);
+    initEditDelegation(hud);
     renderHUD();
 }
 
