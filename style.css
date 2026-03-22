@@ -20,7 +20,7 @@
     --el-mp:       #4878e0;
     --el-xp:       #c87020;
     --el-gold:     #e8c840;
-    --el-ts:       var(--SmartThemeBorderColor, #4a7ba7);
+    --el-ts:       #7eb8d4;
 }
 
 /* ─── DESKTOP SIDEBAR ─────────────────────────────────────────────
@@ -254,7 +254,7 @@
 
 .el-section { margin-bottom: 0.5em; padding: 0.625em 0.75em; background: var(--el-accent); border: 2px solid var(--el-border); border-radius: 0.625em; }
 
-.el-sec-title { font-size: clamp(0.7rem, 0.85vw, 0.875rem); font-weight: bold; letter-spacing: 0.1em; color: var(--el-text-dim); text-transform: uppercase; margin-bottom: 0.5em; padding-bottom: 0.3em; border-bottom: 1px solid var(--el-border); display: flex; align-items: center; gap: 0.4em; }
+.el-sec-title { font-size: clamp(0.7rem, 0.85vw, 0.875rem); font-weight: bold; letter-spacing: 0.1em; color: var(--el-gold); text-transform: uppercase; margin-bottom: 0.5em; padding-bottom: 0.3em; border-bottom: 1px solid color-mix(in srgb, var(--el-gold) 25%, transparent); display: flex; align-items: center; gap: 0.4em; }
 
 .el-cap-note { font-size: clamp(0.65rem, 0.8vw, 0.8rem); color: var(--el-text-dim); margin-left: auto; opacity: 0.7; }
 
@@ -291,9 +291,9 @@
 
 .el-ts-row { display: flex; align-items: center; gap: 0.5em; }
 
-.el-ts-pip { width: clamp(12px, 1.8vw, 16px); height: clamp(12px, 1.8vw, 16px); border-radius: 50%; border: 2px solid color-mix(in srgb, var(--el-ts) 30%, transparent); background: rgba(0,0,0,0.3); transition: all 0.3s ease; flex-shrink: 0; }
+.el-ts-pip { width: clamp(12px, 1.8vw, 16px); height: clamp(12px, 1.8vw, 16px); border-radius: 50%; border: 2px solid rgba(126,184,212,0.3); background: rgba(0,0,0,0.4); transition: all 0.3s ease; flex-shrink: 0; }
 
-.el-ts-pip.active { background: color-mix(in srgb, var(--el-ts) 40%, transparent); border-color: var(--el-ts); box-shadow: 0 0 8px color-mix(in srgb, var(--el-ts) 60%, transparent); }
+.el-ts-pip.active { background: var(--el-ts); border-color: var(--el-ts); box-shadow: 0 0 7px var(--el-ts); }
 
 .el-ts-desc { font-size: clamp(0.75rem, 0.9vw, 0.9rem); color: var(--el-ts); }
 
