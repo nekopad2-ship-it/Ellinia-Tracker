@@ -731,6 +731,10 @@ function renderHUD() {
     const hud = document.getElementById('el-hud');
     if (!hud) return;
 
+    // Snapshot which collapsible bodies are currently OPEN before re-render
+    const openIds = new Set();
+    hud.querySelectorAll('.el-collapse-body:not(.collapsed)').forEach(el => { if (el.id) openIds.add(el.id); });
+
     const playerTab   = hud.querySelector('#el-tab-player');
     const npcTab      = hud.querySelector('#el-tab-npcs');
     const settingsTab = hud.querySelector('#el-tab-settings');
@@ -738,6 +742,16 @@ function renderHUD() {
     if (playerTab)   playerTab.innerHTML   = renderCharPanel(settings.state.player);
     if (npcTab)      npcTab.innerHTML      = renderNPCTab();
     if (settingsTab) settingsTab.innerHTML = renderSettingsTab();
+
+    // Restore open state
+    openIds.forEach(id => {
+        const el = hud.querySelector(`#${CSS.escape(id)}`);
+        if (el) {
+            el.classList.remove('collapsed');
+            const arrow = el.closest('.el-collapse')?.querySelector('.el-arrow');
+            if (arrow) arrow.textContent = '▼';
+        }
+    });
 
     bindCollapsibles(hud);
     bindNPCEvents(hud);
