@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { extension_settings, getContext } from '../../../extensions.js';
-import { saveSettingsDebounced, eventSource, event_types, user_avatar, getThumbnailUrl, characters, this_chid, chat_metadata, saveChatDebounced } from '../../../../script.js';
+import { saveSettingsDebounced, eventSource, event_types, user_avatar, getThumbnailUrl, characters, this_chid, chat_metadata, saveChatDebounced, setExtensionPrompt, extension_prompt_types, extension_prompt_roles } from '../../../../script.js';
 
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
@@ -83,6 +83,17 @@ const DEFAULT_SETTINGS = {
     completionPreset:  '',
     autoUpdate:        true,
     contextMessages:   3,
+    injectEnabled:     true,
+    injectDepth:       0,
+    injectSections: {
+        player:     true,
+        charPlayer: true,
+        npcs:       true,
+        equipment:  true,
+        inventory:  true,
+        skills:     true,
+        status:     true,
+    },
     state: {
         player:     null,
         charPlayer: null,
@@ -917,6 +928,33 @@ function renderSettingsTab() {
     <div class="el-settings-group el-danger-group">
         <div class="el-settings-title">DANGER ZONE</div>
         <button class="el-btn danger" id="el-reset-all">↺ Reset All Tracked State</button>
+    </div>
+
+    <div class="el-settings-group">
+        <div class="el-settings-title">CONTEXT INJECTION</div>
+        <label class="el-label-inline">
+            <input type="checkbox" id="el-inject-enabled" ${settings.injectEnabled !== false ? 'checked' : ''}/>
+            Inject tracker state before each generation
+        </label>
+        <label class="el-label">Injection Depth
+            <input type="number" id="el-inject-depth" class="el-input" value="${settings.injectDepth ?? 0}" min="0" max="10" style="width:5em"/>
+            <span style="font-size:0.75rem;color:var(--el-text-dim);margin-left:0.5em">0 = right before generation</span>
+        </label>
+        <div class="el-settings-title" style="margin-top:0.5em;font-size:0.7rem">INCLUDE IN INJECTION</div>
+        ${[
+            ['el-inj-skills',    'injectSections.skills',    'Skills'],
+            ['el-inj-equipment', 'injectSections.equipment', 'Equipment'],
+            ['el-inj-inventory', 'injectSections.inventory', 'Inventory'],
+            ['el-inj-status',    'injectSections.status',    'Status Effects'],
+            ['el-inj-npcs',      'injectSections.npcs',      'NPCs (Roster)'],
+        ].map(([id, key, label]) => {
+            const sec = settings.injectSections || {};
+            const field = key.split('.')[1];
+            const checked = sec[field] !== false ? 'checked' : '';
+            return `<label class="el-label-inline"><input type="checkbox" id="${id}" data-inj="${field}" ${checked}/> ${label}</label>`;
+        }).join('')}
+        <div id="el-inject-preview" class="el-inject-preview"></div>
+        <button class="el-btn small" id="el-preview-inject">Preview Injection</button>
     </div>`;
 }
 
@@ -1072,6 +1110,38 @@ function bindSettingsEvents(root) {
         saveState();
         renderHUD();
         showNotif('State reset');
+    });
+
+    // Injection toggle
+    root.querySelector('#el-inject-enabled')?.addEventListener('change', e => {
+        settings.injectEnabled = e.target.checked;
+        saveState();
+        if (!settings.injectEnabled) clearInjection();
+        showNotif(settings.injectEnabled ? 'Injection enabled' : 'Injection disabled');
+    });
+
+    // Injection depth
+    root.querySelector('#el-inject-depth')?.addEventListener('change', e => {
+        settings.injectDepth = Math.max(0, parseInt(e.target.value) || 0);
+        saveState();
+    });
+
+    // Section toggles
+    root.querySelectorAll('[data-inj]').forEach(cb => {
+        cb.addEventListener('change', e => {
+            if (!settings.injectSections) settings.injectSections = {};
+            settings.injectSections[e.target.dataset.inj] = e.target.checked;
+            saveState();
+        });
+    });
+
+    // Preview button
+    root.querySelector('#el-preview-inject')?.addEventListener('click', () => {
+        const preview = root.querySelector('#el-inject-preview');
+        if (!preview) return;
+        const text = formatStateForContext();
+        preview.textContent = text || '(nothing to inject — no state yet)';
+        preview.style.display = 'block';
     });
 }
 
@@ -1553,6 +1623,130 @@ function createHUD() {
     renderHUD();
 }
 
+// ─── CONTEXT INJECTION ────────────────────────────────────────────────────────
+
+const INJECTION_KEY = 'ellinia_tracker_state';
+
+function formatChar(char, sections) {
+    if (!char) return null;
+    const lines = [];
+
+    // Identity line
+    const idParts = [char.name || '?'];
+    if (char.class) idParts.push(`${char.class} ${char.classRank || 'F'}`);
+    if (char.aboGender) idParts.push(char.aboGender);
+    if (char.aboStatus && char.aboStatus !== 'neutral') idParts.push(char.aboStatus.toUpperCase());
+    if (char.adventurerRank) idParts.push(`ADV:${char.adventurerRank}`);
+    idParts.push(`HP:${char.hp?.current??'?'}/${char.hp?.max??'?'}`);
+    idParts.push(`MP:${char.mana?.current??'?'}/${char.mana?.max??'?'}`);
+    lines.push(idParts.join(' | '));
+
+    // Stats
+    if (char.stats) {
+        const s = char.stats;
+        lines.push(`STR:${s.STR} AGI:${s.AGI} VIT:${s.VIT} INT:${s.INT} WIS:${s.WIS} LCK:${s.LCK}`);
+    }
+
+    // Special abilities
+    if (char.isPlayer && char.threadSightLevel > 0) {
+        const tsd = ['—','Common legible','Uncommon legible','Rare legible+mana','Weak point detect','Epic+full HUD'][char.threadSightLevel] || `Lv.${char.threadSightLevel}`;
+        lines.push(`Thread Sight Lv.${char.threadSightLevel} — ${tsd}`);
+    }
+    if (char.isCharPlayer && char.greatSageLevel > 0) {
+        const gsd = ['—','Ledger: stats+hit%','Ledger: elemental+cooldowns','Ledger: multi-target','Analyst: conditional recs','Analyst: pattern+intent'][char.greatSageLevel] || `Lv.${char.greatSageLevel}`;
+        lines.push(`Great Sage Lv.${char.greatSageLevel} — ${gsd}`);
+    }
+
+    // Disciplines
+    if (char.disciplines) {
+        const discs = Object.entries(char.disciplines)
+            .filter(([,v]) => v.level > 1)
+            .map(([k,v]) => `${k}:${v.level}`)
+            .join(' ');
+        if (discs) lines.push(`Disciplines: ${discs}`);
+    }
+
+    // Skills
+    if (sections.skills && char.skills?.length > 0) {
+        const sk = char.skills.map(s => `${s.name} ${s.rank}·${s.level}`).join(', ');
+        lines.push(`Skills: ${sk}`);
+    }
+
+    // Equipment
+    if (sections.equipment && char.equipment) {
+        const equipped = Object.entries(char.equipment)
+            .filter(([,v]) => v?.name)
+            .map(([,v]) => `${v.name}${v.tier && v.tier !== 'Common' ? ` [${v.tier}]` : ''}`)
+            .join(', ');
+        if (equipped) lines.push(`Equip: ${equipped}`);
+    }
+
+    // Inventory
+    if (sections.inventory && char.inventory?.length > 0) {
+        const inv = char.inventory.map(i => `${i.name}×${i.quantity||1}`).join(', ');
+        lines.push(`Inv: ${inv}`);
+    }
+
+    // Mesos
+    if (char.mesos > 0) lines.push(`Mesos: ${char.mesos.toLocaleString()}`);
+
+    // Status effects
+    if (sections.status && char.statusEffects?.length > 0) {
+        const fx = char.statusEffects.map(f => `${f.name}(${f.duration??'∞'}t)`).join(', ');
+        lines.push(`Status: ${fx}`);
+    }
+
+    return lines.join('\n');
+}
+
+function formatStateForContext() {
+    if (!settings.state) return '';
+    const sec = settings.injectSections || {};
+    const blocks = [];
+
+    if (sec.player !== false && settings.state.player) {
+        const block = formatChar(settings.state.player, sec);
+        if (block) blocks.push(block);
+    }
+
+    if (sec.charPlayer !== false && settings.state.charPlayer) {
+        const block = formatChar(settings.state.charPlayer, sec);
+        if (block) blocks.push(block);
+    }
+
+    if (sec.npcs !== false && settings.state.npcs) {
+        for (const npc of Object.values(settings.state.npcs)) {
+            const block = formatChar(npc, sec);
+            if (block) blocks.push(block);
+        }
+    }
+
+    if (!blocks.length) return '';
+    return `[ELLINIA TRACKER]\n${blocks.join('\n\n')}`;
+}
+
+function injectState() {
+    if (!settings.injectEnabled) {
+        clearInjection();
+        return;
+    }
+    if (!chat_metadata?.ellinia_state) return; // no state yet
+    const text = formatStateForContext();
+    if (!text) return;
+    setExtensionPrompt(
+        INJECTION_KEY,
+        text,
+        extension_prompt_types.IN_CHAT,
+        settings.injectDepth ?? 0,
+        false,
+        extension_prompt_roles.SYSTEM
+    );
+}
+
+function clearInjection() {
+    setExtensionPrompt(INJECTION_KEY, '', extension_prompt_types.IN_CHAT, 0);
+}
+
 // ─── EVENT HOOKS ──────────────────────────────────────────────────────────────
 
 function hookEvents() {
@@ -1566,6 +1760,10 @@ function hookEvents() {
             renderHUD();
         }, 1000);
     }
+
+    eventSource.on(event_types.GENERATION_STARTED, injectState);
+    eventSource.on(event_types.GENERATION_ENDED,   clearInjection);
+    eventSource.on(event_types.GENERATION_STOPPED, clearInjection);
 
     eventSource.on(event_types.MESSAGE_RECEIVED, () => {
         if (settings.autoUpdate) {
