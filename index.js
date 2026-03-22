@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { extension_settings } from '../../../extensions.js';
-import { saveSettingsDebounced, eventSource, event_types } from '../../../../script.js';
+import { saveSettingsDebounced, eventSource, event_types, user_avatar, getThumbnailUrl, characters, this_chid } from '../../../../script.js';
 
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
@@ -282,25 +282,16 @@ function totalLevel(char) {
 
 // ─── CHARACTER PANEL RENDERER ─────────────────────────────────────────────────
 
+
 function getCharAvatar(char) {
     try {
         if (char.isPlayer) {
-            // User persona avatar
-            const personas = extension_settings?.personas;
-            const activeId = extension_settings?.active_persona;
-            if (activeId && personas?.[activeId]?.avatar) {
-                return `/User Avatars/${personas[activeId].avatar}`;
-            }
-            // Fallback: check ST user avatar setting
-            const userAvatar = extension_settings?.user_avatar;
-            if (userAvatar) return `/User Avatars/${userAvatar}`;
+            if (user_avatar) return getThumbnailUrl('avatar', user_avatar);
             return null;
         } else {
-            // NPC/char avatar from ST characters list
-            const ctx  = getContext();
-            const name = char.name?.toLowerCase().trim();
-            const match = ctx.characters?.find(c => c.name?.toLowerCase().trim() === name);
-            if (match?.avatar) return `/characters/${match.avatar}`;
+            const name  = char.name?.toLowerCase().trim();
+            const match = characters?.find(c => c.name?.toLowerCase().trim() === name);
+            if (match?.avatar) return getThumbnailUrl('avatar', match.avatar);
             return null;
         }
     } catch { return null; }
@@ -308,9 +299,8 @@ function getCharAvatar(char) {
 
 function getCurrentCharAvatar() {
     try {
-        const ctx  = getContext();
-        const char = ctx.characters?.[ctx.characterId];
-        if (char?.avatar) return `/characters/${char.avatar}`;
+        const char = characters?.[this_chid];
+        if (char?.avatar) return getThumbnailUrl('avatar', char.avatar);
         return null;
     } catch { return null; }
 }
@@ -1390,9 +1380,23 @@ function createHUD() {
 function hookEvents() {
     eventSource.on(event_types.MESSAGE_RECEIVED, () => {
         if (settings.autoUpdate) {
-            // Short delay to ensure ST has fully appended the message
             setTimeout(parseLastMessages, 600);
         }
+    });
+
+    // Re-render HUD when chat changes (new character loaded) — updates avatars + clears stale state
+    eventSource.on(event_types.CHAT_CHANGED, () => {
+        renderHUD();
+    });
+
+    // Re-render when persona avatar changes
+    eventSource.on(event_types.USER_MESSAGE_RENDERED, () => {
+        renderHUD();
+    });
+
+    // Re-render when ST settings change (persona switch etc)
+    eventSource.on(event_types.SETTINGS_UPDATED, () => {
+        renderHUD();
     });
 }
 
