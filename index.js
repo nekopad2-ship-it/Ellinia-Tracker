@@ -1552,18 +1552,29 @@ function createOrb() {
 
     const orb = document.createElement('div');
     orb.id    = 'el-orb';
-    orb.innerHTML = '<span class="el-orb-glyph">◈</span>';
+    orb.innerHTML = '<span style="font-size:24px;color:#e8c840;pointer-events:none;text-shadow:0 0 8px rgba(232,200,64,0.6)">◈</span>';
     orb.title = 'Ellinia Tracker';
 
-    // Minimal inline overrides — rest comes from style.css #el-orb
-    // display:flex required because CSS defaults to none (JS-controlled visibility)
-    // zIndex high enough to clear any ST overlays
+    // Inline styles include visual properties because the orb lives on <html>
+    // (outside <body>) where ST's CSS variables may not cascade
     Object.assign(orb.style, {
-        display:   'flex',
-        position:  'fixed',
-        zIndex:    '10002',
-        right:     'auto',
-        top:       'auto',
+        display:        'flex',
+        position:       'fixed',
+        zIndex:         '10002',
+        width:          '56px',
+        height:         '56px',
+        borderRadius:   '50%',
+        background:     'rgba(22, 33, 62, 0.95)',
+        border:         '2px solid rgba(232, 200, 64, 0.6)',
+        boxShadow:      '0 4px 20px rgba(0,0,0,0.5), 0 0 16px rgba(232, 200, 64, 0.25)',
+        alignItems:     'center',
+        justifyContent: 'center',
+        cursor:         'grab',
+        userSelect:     'none',
+        touchAction:    'none',
+        webkitTapHighlightColor: 'transparent',
+        right:          'auto',
+        top:            'auto',
     });
 
     // Restore saved position, or use safe default
@@ -1709,7 +1720,6 @@ function createHUD() {
     hud.querySelector('#el-minimize-btn').addEventListener('click', toggleCollapse);
     tab.addEventListener('click', toggleCollapse);
 
-    createOrb();
     bindTabs(hud);
     initEditDelegation(hud);
     renderHUD();
