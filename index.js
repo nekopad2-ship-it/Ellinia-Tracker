@@ -543,7 +543,7 @@ function renderSettingsTab() {
 
     <div class="el-settings-group">
         <div class="el-settings-title">DEBUG LOG</div>
-        <div id="el-debug-log" style="font-size:0.75rem;font-family:monospace;max-height:200px;overflow-y:auto;color:var(--el-text-dim);line-height:1.6;"></div>
+        <div id="el-debug-log" style="font-size:0.75rem;font-family:monospace;max-height:200px;overflow-y:auto;color:var(--el-text-dim);line-height:1.6;">${_elLog.map(l => `<div class="el-log-line">${l}</div>`).join('')}</div>
         <button class="el-btn small" onclick="document.getElementById('el-debug-log').innerHTML='';_elLog.length=0">Clear</button>
     </div>`;
 }
