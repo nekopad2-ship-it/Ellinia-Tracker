@@ -534,18 +534,28 @@ function renderCharPanel(char) {
     html += `<div class="el-section el-collapse" data-target="${sid}">
         <div class="el-sec-title el-toggle">SKILLS (${char.skills?.length||0}) <span class="el-arrow">▼</span></div>
         <div class="el-collapse-body collapsed" id="${sid}">
-            ${(char.skills||[]).map((sk,i) => `
-            <div class="el-skill-edit-row">
-                <select class="el-mini-sel" data-cid="${cid}" data-f="skill.rank.${i}">${RANK_ORDER.map(r=>`<option value="${r}" ${sk.rank===r?'selected':''}>${r}</option>`).join('')}</select>
-                <div class="el-pm-btns">
-                    <button class="el-pm-btn small" data-cid="${cid}" data-f="skill.level.${i}" data-d="-1">−</button>
-                    <span class="el-disc-lvl">Lv.${sk.level}</span>
-                    <button class="el-pm-btn small" data-cid="${cid}" data-f="skill.level.${i}" data-d="1">+</button>
-                </div>
-                <span class="el-editable el-skill-name" data-cid="${cid}" data-f="skill.name.${i}" contenteditable="true">${escapeHtml(sk.name)}</span>
-                <button class="el-rm-btn" data-cid="${cid}" data-f="skill.remove.${i}" title="Remove skill">✕</button>
-                <div class="el-editable el-skill-desc" data-cid="${cid}" data-f="skill.desc.${i}" contenteditable="true">${escapeHtml(sk.description||'')}</div>
-            </div>`).join('')}
+            ${(char.skills||[]).map((sk,i) => {
+                const rankColor = RANK_COLORS[sk.rank] || '#888';
+                return `<div class="el-sk-card" style="--skc:${rankColor}">
+                    <button class="el-sk-rank" data-cid="${cid}" data-f="skill.rank.${i}" title="Click to cycle rank">${sk.rank||'F'}</button>
+                    <div class="el-sk-body">
+                        <div class="el-sk-top">
+                            <div class="el-pm-btns">
+                                <button class="el-pm-btn small" data-cid="${cid}" data-f="skill.level.${i}" data-d="-1">−</button>
+                                <span class="el-sk-lv">Lv.${sk.level}</span>
+                                <button class="el-pm-btn small" data-cid="${cid}" data-f="skill.level.${i}" data-d="1">+</button>
+                            </div>
+                            <span class="el-editable el-sk-name" data-cid="${cid}" data-f="skill.name.${i}" contenteditable="true">${escapeHtml(sk.name)}</span>
+                            <button class="el-sk-edit-btn" data-cid="${cid}" data-f="skill.desc.toggle.${i}" title="Edit description">✎</button>
+                            <button class="el-rm-btn always-show" data-cid="${cid}" data-f="skill.remove.${i}" title="Remove">✕</button>
+                        </div>
+                        <div class="el-sk-desc-wrap" id="sk-desc-${cid}-${i}" style="display:none">
+                            <div class="el-editable el-sk-desc" data-cid="${cid}" data-f="skill.desc.${i}" contenteditable="true">${escapeHtml(sk.description||'')}</div>
+                        </div>
+                        ${sk.description ? `<div class="el-sk-desc-preview">${escapeHtml(sk.description)}</div>` : ''}
+                    </div>
+                </div>`;
+            }).join('')}
             <button class="el-btn small el-add-btn" data-cid="${cid}" data-f="skill.add">+ Add Skill</button>
         </div>
     </div>`;
@@ -684,6 +694,35 @@ function initEditDelegation(hud) {
 
         const pswWrap = e.target.closest('.el-psw-wrap[data-view]');
         if (pswWrap) { _activePlayerView = pswWrap.dataset.view; renderHUD(); return; }
+
+        // Skill rank badge cycle
+        const skRank = e.target.closest('.el-sk-rank[data-cid]');
+        if (skRank) {
+            e.stopPropagation();
+            const char = getCharByKey(skRank.dataset.cid);
+            const f    = skRank.dataset.f;
+            const i    = parseInt(f.split('.')[2]);
+            if (!char?.skills?.[i]) return;
+            const idx = RANK_ORDER.indexOf(char.skills[i].rank || 'F');
+            char.skills[i].rank = RANK_ORDER[(idx + 1) % RANK_ORDER.length];
+            saveState(); renderHUD(); return;
+        }
+
+        // Skill description toggle
+        const skEditBtn = e.target.closest('.el-sk-edit-btn[data-cid]');
+        if (skEditBtn) {
+            e.stopPropagation();
+            const parts = skEditBtn.dataset.f.split('.');
+            const wcid  = skEditBtn.dataset.cid;
+            const i     = parts[3];
+            const wrap  = document.getElementById(`sk-desc-${wcid}-${i}`);
+            if (wrap) {
+                const open = wrap.style.display === 'none' || wrap.style.display === '';
+                wrap.style.display = open ? 'block' : 'none';
+                if (open) wrap.querySelector('[contenteditable]')?.focus();
+            }
+            return;
+        }
 
         const aboCycle = e.target.closest('.el-abo-cycle[data-cid]');
         if (aboCycle) {
