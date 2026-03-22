@@ -4,7 +4,9 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { extension_settings, getContext } from '../../../extensions.js';
-import { eventSource, event_types, saveSettingsDebounced, executeSlashCommands } from '../../../../script.js';
+import { saveSettingsDebounced } from '../../../../script.js';
+import { eventSource, event_types } from '../../../../script.js';
+
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
