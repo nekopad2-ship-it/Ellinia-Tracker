@@ -3,7 +3,8 @@
 //  Drop into: SillyTavern/public/extensions/third-party/ellinia-tracker/
 // ═══════════════════════════════════════════════════════════════════
 
-import { extension_settings, getContext, saveSettingsDebounced } from '../../../extensions.js';
+import { extension_settings, getContext } from '../../../extensions.js';
+import { saveSettingsDebounced } from '../../../../script.js';
 import { eventSource, event_types } from '../../../../script.js';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
