@@ -1549,7 +1549,7 @@ function bindTabs(hud) {
 
 function createOrb() {
     if (document.getElementById('el-orb')) return;
-    console.log('[Ellinia] createOrb — building orb');
+    dbg('createOrb — building orb');
 
     const orb = document.createElement('div');
     orb.id    = 'el-orb';
@@ -1581,7 +1581,7 @@ function createOrb() {
     });
 
     document.body.appendChild(orb);
-    console.log('[Ellinia] createOrb — orb appended to body');
+    dbg('createOrb — orb appended to body');
 
     // ── Restore saved position, then clamp to viewport ─────────────
     const savedLeft   = localStorage.getItem('el_orb_left');
@@ -1595,7 +1595,7 @@ function createOrb() {
         const vw   = window.innerWidth;
         const vh   = window.innerHeight;
         if (rect.right < 10 || rect.left > vw - 10 || rect.top > vh - 10 || rect.bottom < 10) {
-            console.log('[Ellinia] createOrb — saved position offscreen, resetting');
+            dbg('createOrb — saved position offscreen, resetting');
             orb.style.left   = '16px';
             orb.style.bottom = '100px';
             orb.style.right  = 'auto';
@@ -1891,36 +1891,95 @@ function hookEvents() {
     eventSource.on(event_types.SETTINGS_UPDATED, debouncedRender);
 }
 
+// ─── VISUAL DEBUG (remove after orb is working) ──────────────────────────────
+
+const _EL_DEBUG = true; // ← flip to false (or delete this block) once orb works
+
+let _dbgBox = null;
+function dbg(msg) {
+    console.log(`[Ellinia] ${msg}`);
+    if (!_EL_DEBUG) return;
+    if (!_dbgBox) {
+        _dbgBox = document.createElement('div');
+        Object.assign(_dbgBox.style, {
+            position:     'fixed',
+            top:          '0',
+            left:         '0',
+            right:        '0',
+            maxHeight:    '35vh',
+            overflowY:    'auto',
+            background:   'rgba(0,0,0,0.88)',
+            color:        '#0f0',
+            fontFamily:   'monospace',
+            fontSize:     '11px',
+            lineHeight:   '1.4',
+            padding:      '6px 8px',
+            zIndex:       '2147483647',
+            pointerEvents:'auto',
+            whiteSpace:   'pre-wrap',
+            wordBreak:    'break-all',
+        });
+        // Tap to dismiss
+        _dbgBox.addEventListener('click', () => { _dbgBox.style.display = _dbgBox.style.display === 'none' ? 'block' : 'none'; });
+        document.body.appendChild(_dbgBox);
+    }
+    _dbgBox.textContent += `${new Date().toLocaleTimeString()} ${msg}\n`;
+    _dbgBox.scrollTop = _dbgBox.scrollHeight;
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 
 jQuery(async () => {
-    console.log(`[Ellinia Tracker v${EXT_VERSION}] Init starting…`);
+    dbg(`Init starting — v${EXT_VERSION}`);
+    dbg(`UA: ${navigator.userAgent.slice(0, 80)}`);
+    dbg(`Viewport: ${window.innerWidth}×${window.innerHeight}`);
+    dbg(`structuredClone exists: ${typeof structuredClone !== 'undefined'}`);
 
     try {
         initSettings();
-        loadChatState();
+        dbg('✓ initSettings');
     } catch (err) {
-        console.error('[Ellinia] Settings/state init failed:', err);
+        dbg(`✗ initSettings FAILED: ${err.message}`);
+    }
+
+    try {
+        loadChatState();
+        dbg('✓ loadChatState');
+    } catch (err) {
+        dbg(`✗ loadChatState FAILED: ${err.message}`);
     }
 
     // Orb must survive independently — if HUD creation crashes, the orb still shows
     try {
         createOrb();
+        dbg('✓ createOrb');
+        // Verify it's actually in the DOM and visible
+        const orb = document.getElementById('el-orb');
+        if (orb) {
+            const rect = orb.getBoundingClientRect();
+            dbg(`  orb rect: L${Math.round(rect.left)} T${Math.round(rect.top)} W${Math.round(rect.width)} H${Math.round(rect.height)}`);
+            dbg(`  orb display: ${orb.style.display} | position: ${orb.style.position} | zIndex: ${orb.style.zIndex}`);
+            dbg(`  orb parent: ${orb.parentElement?.tagName}#${orb.parentElement?.id || '(none)'}`);
+        } else {
+            dbg('  ⚠ orb NOT in DOM after createOrb()!');
+        }
     } catch (err) {
-        console.error('[Ellinia] createOrb failed:', err);
+        dbg(`✗ createOrb FAILED: ${err.message}\n  ${err.stack?.split('\n')[1] || ''}`);
     }
 
     try {
         createHUD();
+        dbg('✓ createHUD');
     } catch (err) {
-        console.error('[Ellinia] createHUD failed:', err);
+        dbg(`✗ createHUD FAILED: ${err.message}`);
     }
 
     try {
         hookEvents();
+        dbg('✓ hookEvents');
     } catch (err) {
-        console.error('[Ellinia] hookEvents failed:', err);
+        dbg(`✗ hookEvents FAILED: ${err.message}`);
     }
 
-    console.log(`[Ellinia Tracker v${EXT_VERSION}] Initialized`);
+    dbg('Init complete — tap this box to hide/show');
 });
