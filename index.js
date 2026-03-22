@@ -313,6 +313,15 @@ function totalLevel(char) {
 // ─── PLAYER TAB RENDERER ──────────────────────────────────────────────────────
 
 function renderPlayerTab() {
+    // No state yet — show empty placeholder
+    if (!chat_metadata?.ellinia_state) {
+        return `<div class="el-empty-state">
+            <div class="el-empty-glyph">◈</div>
+            <div class="el-empty-text">No data yet</div>
+            <div class="el-empty-sub">Parse a message or send one to begin tracking</div>
+        </div>`;
+    }
+
     const ctx        = getContext();
     const userName   = ctx.name1 || '{{user}}';
     const charName   = ctx.name2 || '{{char}}';
