@@ -902,18 +902,184 @@
 
 /* ─── INJECTION PREVIEW ─────────────────────────────────────────── */
 
-.el-inject-preview {
-    display: none;
-    margin-top: 0.5em;
-    padding: 0.6em 0.75em;
-    background: rgba(0,0,0,0.35);
-    border: 1px solid var(--el-border);
+
+/* ─── HUD FOOTER BAR ─────────────────────────────────────────────── */
+
+.el-hud-footer {
+    display:      flex;
+    gap:          0.5em;
+    padding:      0.5em 0.75em;
+    background:   var(--el-accent);
+    border-top:   2px solid var(--el-border);
+    flex-shrink:  0;
+}
+
+.el-footer-btn {
+    flex:            1;
+    padding:         0.55em 0.75em;
+    border-radius:   0.375em;
+    font-family:     inherit;
+    font-size:       clamp(0.8rem, 1vw, 0.95rem);
+    font-weight:     700;
+    letter-spacing:  0.04em;
+    cursor:          pointer;
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    gap:             0.4em;
+    transition:      all 0.2s ease;
+    white-space:     nowrap;
+    border:          2px solid transparent;
+}
+
+/* Parse — prominent orange like RPG Companion's Refresh button */
+.el-footer-parse {
+    background:   var(--el-hi);
+    border-color: var(--el-hi);
+    color:        #fff;
+}
+.el-footer-parse:hover  { filter: brightness(1.15); }
+.el-footer-parse:active { transform: scale(0.97); }
+.el-footer-parse.spinning { animation: elSpin 0.8s linear infinite; }
+
+/* Settings — secondary style, activates when pane is open */
+.el-footer-settings {
+    flex:         0 0 auto;
+    padding:      0.55em 0.875em;
+    background:   var(--el-accent);
+    border-color: var(--el-border);
+    color:        var(--el-text-dim);
+}
+.el-footer-settings:hover  { border-color: var(--el-hi); color: var(--el-hi); }
+.el-footer-settings.active { background: color-mix(in srgb, var(--el-hi) 15%, var(--el-accent)); border-color: var(--el-hi); color: var(--el-hi); }
+
+/* Extra bottom padding on tab panes so content isn't hidden by footer */
+.el-tab-pane { padding-bottom: 0.5em; }
+
+@media (max-width: 1000px) {
+    .el-scroll { padding: 12px 14px 16px; }
+}
+
+/* ─── TEXTAREA (settings, tracker instruction) ───────────────────── */
+
+.el-textarea {
+    resize:       vertical;
+    min-height:   5em;
+    line-height:  1.55;
+    font-family:  inherit;
+}
+
+/* ─── QUEST TAB ──────────────────────────────────────────────────── */
+
+.el-quest-switcher {
+    display:       flex;
+    gap:           0;
+    margin-bottom: 0.75em;
+    border:        2px solid var(--el-border);
     border-radius: 0.375em;
-    font-family: monospace;
-    font-size: 0.72rem;
-    color: var(--el-text-dim);
-    white-space: pre-wrap;
+    overflow:      hidden;
+}
+
+.el-quest-sw-btn {
+    flex:        1;
+    padding:     0.55em 0.5em;
+    background:  transparent;
+    border:      none;
+    color:       var(--el-text-dim);
+    font-family: inherit;
+    font-size:   clamp(0.78rem, 0.95vw, 0.92rem);
+    font-weight: 600;
+    cursor:      pointer;
+    letter-spacing: 0.03em;
+    transition:  all 0.18s ease;
+}
+.el-quest-sw-btn + .el-quest-sw-btn { border-left: 2px solid var(--el-border); }
+.el-quest-sw-btn:hover  { color: var(--el-text); background: rgba(255,255,255,0.04); }
+.el-quest-sw-btn.active { color: var(--el-hi); background: color-mix(in srgb, var(--el-hi) 10%, var(--el-accent)); }
+
+.el-quest-list { display: flex; flex-direction: column; gap: 0.4em; }
+
+.el-quest-card {
+    background:    var(--el-accent);
+    border:        2px solid var(--el-border);
+    border-radius: 0.5em;
+    padding:       0.6em 0.75em;
+    transition:    border-color 0.2s;
+}
+.el-quest-card:has(.el-quest-status[style*="#52e05a"]) { border-left: 3px solid #52e05a; }
+.el-quest-card:has(.el-quest-status[style*="#e05252"]) { border-left: 3px solid #e05252; opacity: 0.65; }
+.el-quest-card:has(.el-quest-status[style*="#e8c840"]) { border-left: 3px solid var(--el-gold); }
+
+.el-quest-top {
+    display:     flex;
+    align-items: center;
+    gap:         0.5em;
+}
+
+.el-quest-status {
+    width:           1.6em;
+    height:          1.6em;
+    flex-shrink:     0;
+    background:      transparent;
+    border:          2px solid;
+    border-radius:   50%;
+    font-size:       0.8rem;
+    font-weight:     bold;
+    cursor:          pointer;
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    transition:      transform 0.1s, opacity 0.15s;
+    user-select:     none;
+    padding:         0;
+}
+.el-quest-status:hover  { opacity: 0.75; }
+.el-quest-status:active { transform: scale(0.88); }
+
+.el-quest-title {
+    flex:        1;
+    font-size:   clamp(0.85rem, 1vw, 1rem);
+    font-weight: 600;
+    color:       var(--el-text);
+    min-width:   2em;
+    display:     inline-block;
+}
+
+.el-quest-rm {
+    opacity:    0;
+    transition: opacity 0.15s, color 0.15s;
+}
+.el-quest-card:hover .el-quest-rm { opacity: 1; }
+
+.el-quest-notes {
+    color:      var(--el-text-dim);
+    font-style: italic;
+    min-height: 2em;
     line-height: 1.5;
-    max-height: 200px;
-    overflow-y: auto;
+    display:    block;
+    width:      100%;
+}
+
+.el-quest-add { margin-top: 0.25em; width: 100%; opacity: 0.6; }
+.el-quest-add:hover { opacity: 1; }
+
+/* ─── NPC SLIM CARD ──────────────────────────────────────────────── */
+
+.el-npc-slim {
+    padding: 0.5em 0.625em;
+}
+.el-npc-slim .el-ident-row { margin-top: 0.25em; }
+.el-npc-slim .el-section   { margin-top: 0.4em; }
+
+/* ─── APPEARANCE FIELD ───────────────────────────────────────────── */
+
+.el-appearance-edit {
+    display:    block;
+    width:      100%;
+    min-height: 1.2em;
+    font-style: italic;
+    line-height: 1.4;
+    box-sizing: border-box;
+    color:      var(--el-text-dim);
+    font-size:  clamp(0.72rem, 0.85vw, 0.85rem);
 }
