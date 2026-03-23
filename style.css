@@ -1083,3 +1083,230 @@
     color:      var(--el-text-dim);
     font-size:  clamp(0.72rem, 0.85vw, 0.85rem);
 }
+
+
+/* ─── PORTRAIT CARDS ────────────────────────────────────────────── */
+
+.el-portrait-row {
+    display:        grid;
+    grid-template-columns: 1fr 1fr;
+    gap:            0.625em;
+    padding:        0.75em 0.75em 0;
+}
+
+.el-portrait-card {
+    position:       relative;
+    border-radius:  0.625em;
+    overflow:       hidden;
+    border:         2px solid rgba(255,255,255,0.08);
+    cursor:         pointer;
+    transition:     border-color 0.2s ease, transform 0.15s ease;
+    height:         clamp(100px, 15vh, 130px);
+    display:        flex;
+    flex-direction: column;
+}
+
+.el-portrait-card:hover  { border-color: color-mix(in srgb, var(--el-hi) 50%, transparent); }
+.el-portrait-card.active { border-color: var(--el-hi); box-shadow: 0 0 0 1px color-mix(in srgb, var(--el-hi) 30%, transparent); }
+.el-portrait-card:active { transform: scale(0.97); }
+
+.el-portrait-img-wrap {
+    position:   absolute;
+    inset:      0;
+    background: var(--el-accent);
+}
+
+.el-portrait-img {
+    width:       100%;
+    height:      100%;
+    object-fit:  cover;
+    object-position: center top;
+    display:     block;
+    opacity:     0.75;
+    transition:  opacity 0.2s;
+}
+.el-portrait-card.active .el-portrait-img { opacity: 1; }
+
+.el-portrait-placeholder {
+    width:           100%;
+    height:          100%;
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    font-size:       clamp(1.8rem, 4vw, 2.4rem);
+    font-weight:     bold;
+    color:           var(--el-hi);
+    opacity:         0.35;
+}
+
+.el-portrait-overlay {
+    position:   absolute;
+    inset:      0;
+    background: linear-gradient(to top, rgba(10,10,20,0.92) 0%, rgba(10,10,20,0.1) 55%, transparent 100%);
+    pointer-events: none;
+}
+
+.el-portrait-status {
+    position:       absolute;
+    top:            0.4em;
+    right:          0.4em;
+    font-size:      clamp(0.6rem, 0.75vw, 0.75rem);
+    font-weight:    700;
+    letter-spacing: 0.05em;
+    padding:        0.15em 0.45em;
+    border-radius:  0.25em;
+    border:         1px solid;
+    background:     rgba(10,10,20,0.5);
+    color:          var(--el-text-dim);
+    border-color:   rgba(255,255,255,0.2);
+    z-index:        1;
+}
+
+.el-portrait-status-abo {
+    color:        var(--el-text-dim);
+    border-color: rgba(255,255,255,0.15);
+}
+
+.el-portrait-footer {
+    position:  absolute;
+    bottom:    0;
+    left:      0;
+    right:     0;
+    padding:   0.4em 0.6em;
+    z-index:   1;
+}
+
+.el-portrait-name {
+    font-size:      clamp(0.85rem, 1.1vw, 1rem);
+    font-weight:    700;
+    color:          var(--el-hi);
+    letter-spacing: 0.03em;
+    line-height:    1.2;
+}
+.el-portrait-card:not(.active) .el-portrait-name { color: var(--el-text-dim); }
+
+.el-portrait-sub {
+    font-size: clamp(0.65rem, 0.78vw, 0.78rem);
+    color:     rgba(234,234,234,0.45);
+    margin-top: 1px;
+}
+
+/* ─── PAGE TOGGLE (Overview / Loadout) ──────────────────────────── */
+
+.el-page-toggle {
+    display:       flex;
+    margin:        0.5em 0.75em 0;
+    border:        1px solid var(--el-border);
+    border-radius: 0.375em;
+    overflow:      hidden;
+}
+
+.el-page-btn {
+    flex:        1;
+    padding:     0.45em 0.5em;
+    background:  transparent;
+    border:      none;
+    color:       var(--el-text-dim);
+    font-family: inherit;
+    font-size:   clamp(0.75rem, 0.9vw, 0.88rem);
+    font-weight: 600;
+    cursor:      pointer;
+    letter-spacing: 0.03em;
+    transition:  all 0.15s ease;
+}
+.el-page-btn + .el-page-btn { border-left: 1px solid var(--el-border); }
+.el-page-btn:hover  { color: var(--el-text); background: rgba(255,255,255,0.04); }
+.el-page-btn.active { color: var(--el-hi); background: color-mix(in srgb, var(--el-hi) 10%, var(--el-accent)); }
+
+/* ─── SCENE SECTION ─────────────────────────────────────────────── */
+
+.el-scene-section {
+    margin:        0.5em 0.75em 0;
+    padding:       0.625em 0.75em;
+    background:    var(--el-accent);
+    border:        1px solid var(--el-border);
+    border-radius: 0.625em;
+}
+
+.el-scene-grid {
+    display:        flex;
+    flex-direction: column;
+    gap:            0.3em;
+    margin-bottom:  0.5em;
+}
+
+.el-scene-row {
+    display:     flex;
+    align-items: flex-start;
+    gap:         0.5em;
+}
+
+.el-scene-label {
+    font-size:      clamp(0.65rem, 0.78vw, 0.78rem);
+    font-weight:    700;
+    letter-spacing: 0.08em;
+    color:          var(--el-text-dim);
+    flex-shrink:    0;
+    width:          4.5em;
+    padding-top:    0.1em;
+    text-transform: uppercase;
+}
+
+.el-scene-field {
+    flex:        1;
+    font-size:   clamp(0.78rem, 0.92vw, 0.88rem);
+    color:       var(--el-text);
+    line-height: 1.45;
+    min-height:  1.2em;
+    display:     inline-block;
+    width:       100%;
+}
+
+.el-focus-field {
+    font-size:   clamp(0.8rem, 0.95vw, 0.9rem);
+    color:       color-mix(in srgb, var(--el-hi) 80%, var(--el-text));
+    min-height:  2em;
+}
+
+.el-scene-events-wrap { margin-top: 0.4em; }
+
+.el-scene-events-header {
+    display:     flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.3em;
+}
+
+.el-scene-event-row {
+    display:     flex;
+    align-items: flex-start;
+    gap:         0.4em;
+    padding:     0.2em 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.el-scene-event-row:last-child { border-bottom: none; }
+
+.el-scene-event-bullet {
+    font-size:  0.5rem;
+    color:      var(--el-hi);
+    flex-shrink: 0;
+    padding-top: 0.35em;
+    opacity:    0.7;
+}
+
+.el-scene-event-text {
+    flex:        1;
+    font-size:   clamp(0.75rem, 0.88vw, 0.85rem);
+    color:       var(--el-text);
+    line-height: 1.4;
+    min-height:  1.1em;
+}
+
+.el-scene-event-rm { opacity: 0; transition: opacity 0.15s; }
+.el-scene-event-row:hover .el-scene-event-rm { opacity: 1; }
+
+@media (max-width: 1000px) {
+    .el-portrait-row    { padding: 10px 10px 0; gap: 8px; }
+    .el-page-toggle     { margin: 8px 10px 0; }
+    .el-scene-section   { margin: 8px 10px 0; }
+}
