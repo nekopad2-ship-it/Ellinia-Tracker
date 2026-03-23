@@ -829,6 +829,16 @@ function initEditDelegation(hud) {
         }
     });
 
+    // ── Focusin: clear placeholder text when field is focused ────────
+    hud.addEventListener('focusin', e => {
+        const el = e.target.closest('.el-editable[contenteditable][data-cid]');
+        if (!el) return;
+        // If the field only contains a placeholder <span>, clear it so user types into empty field
+        if (el.querySelector('span') && el.innerText.trim() === el.querySelector('span')?.textContent?.trim()) {
+            el.innerHTML = '';
+        }
+    });
+
     // ── Focusout: contenteditable save ───────────────────────────────
     hud.addEventListener('focusout', e => {
         const el = e.target.closest('.el-editable[contenteditable][data-cid]');
@@ -1946,9 +1956,26 @@ function formatChar(char, sections) {
     if (!char) return null;
     const lines = [];
 
-    // Identity line
+    // ── NPC (not player, not charPlayer) — slim format ────────────────
+    if (!char.isPlayer && !char.isCharPlayer) {
+        const idParts = [char.name || '?'];
+        if (char.class) idParts.push(char.class);
+        if (char.adventurerRank) idParts.push(`ADV:${char.adventurerRank}`);
+        if (char.aboGender) idParts.push(char.aboGender);
+        if (char.aboStatus && char.aboStatus !== 'neutral') idParts.push(char.aboStatus.toUpperCase());
+        lines.push(idParts.join(' | '));
+        if (char.appearance) lines.push(`Appearance: ${char.appearance}`);
+        if (sections.status && char.statusEffects?.length > 0) {
+            const fx = char.statusEffects.map(f => `${f.name}(${f.duration??'∞'}t)`).join(', ');
+            lines.push(`Status: ${fx}`);
+        }
+        if (char.notes?.trim()) lines.push(`Notes: ${char.notes.trim()}`);
+        return lines.join('\n');
+    }
+
+    // ── Player / CharPlayer — full format ─────────────────────────────
     const idParts = [char.name || '?'];
-    if (char.class) idParts.push(`${char.class} ${char.classRank || 'F'}`);
+    if (char.class) idParts.push(char.class);
     if (char.aboGender) idParts.push(char.aboGender);
     if (char.aboStatus && char.aboStatus !== 'neutral') idParts.push(char.aboStatus.toUpperCase());
     if (char.adventurerRank) idParts.push(`ADV:${char.adventurerRank}`);
@@ -1956,16 +1983,13 @@ function formatChar(char, sections) {
     idParts.push(`MP:${char.mana?.current??'?'}/${char.mana?.max??'?'}`);
     lines.push(idParts.join(' | '));
 
-    // Appearance
     if (char.appearance) lines.push(`Appearance: ${char.appearance}`);
 
-    // Stats
     if (char.stats) {
         const s = char.stats;
         lines.push(`STR:${s.STR} AGI:${s.AGI} VIT:${s.VIT} INT:${s.INT} WIS:${s.WIS} LCK:${s.LCK}`);
     }
 
-    // Special abilities
     if (char.isPlayer && char.threadSightLevel > 0) {
         const tsd = ['—','Common legible','Uncommon legible','Rare legible+mana','Weak point detect','Epic+full HUD'][char.threadSightLevel] || `Lv.${char.threadSightLevel}`;
         lines.push(`Thread Sight Lv.${char.threadSightLevel} — ${tsd}`);
@@ -1975,7 +1999,6 @@ function formatChar(char, sections) {
         lines.push(`Great Sage Lv.${char.greatSageLevel} — ${gsd}`);
     }
 
-    // Disciplines
     if (char.disciplines) {
         const discs = Object.entries(char.disciplines)
             .filter(([,v]) => v.level > 1)
@@ -1984,13 +2007,11 @@ function formatChar(char, sections) {
         if (discs) lines.push(`Disciplines: ${discs}`);
     }
 
-    // Skills
     if (sections.skills && char.skills?.length > 0) {
         const sk = char.skills.map(s => `${s.name} ${s.rank}·${s.level}`).join(', ');
         lines.push(`Skills: ${sk}`);
     }
 
-    // Equipment
     if (sections.equipment && char.equipment) {
         const equipped = Object.entries(char.equipment)
             .filter(([,v]) => v?.name)
@@ -1999,16 +2020,13 @@ function formatChar(char, sections) {
         if (equipped) lines.push(`Equip: ${equipped}`);
     }
 
-    // Inventory
     if (sections.inventory && char.inventory?.length > 0) {
         const inv = char.inventory.map(i => `${i.name}×${i.quantity||1}`).join(', ');
         lines.push(`Inv: ${inv}`);
     }
 
-    // Mesos
     if (char.mesos > 0) lines.push(`Mesos: ${char.mesos.toLocaleString()}`);
 
-    // Status effects
     if (sections.status && char.statusEffects?.length > 0) {
         const fx = char.statusEffects.map(f => `${f.name}(${f.duration??'∞'}t)`).join(', ');
         lines.push(`Status: ${fx}`);
