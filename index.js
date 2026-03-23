@@ -1552,24 +1552,25 @@ function createOrb() {
 
     const orb = document.createElement('div');
     orb.id    = 'el-orb';
-    orb.innerHTML = '<span style="font-size:24px;color:#e8c840;pointer-events:none;text-shadow:0 0 8px rgba(232,200,64,0.6)">◈</span>';
+    orb.innerHTML = '<span style="pointer-events:none;font-size:24px;color:#e8c840;text-shadow:0 0 8px rgba(232,200,64,0.6)">◈</span>';
     orb.title = 'Ellinia Tracker';
 
-    // Inline styles include visual properties because the orb lives on <html>
-    // (outside <body>) where ST's CSS variables may not cascade.
-    // zIndex must be max-int — ST mobile overlays sit above 10000.
+    // Every visual property must be inline — orb lives on <html> (not <body>)
+    // so CSS variables and stylesheets don't reach it reliably on mobile
     Object.assign(orb.style, {
         display:        'flex',
         position:       'fixed',
         zIndex:         '2147483647',
-        width:          '56px',
-        height:         '56px',
-        borderRadius:   '50%',
-        background:     'rgba(30, 40, 70, 0.95)',
+        background:     'rgba(26, 26, 46, 0.95)',
         border:         '2.5px solid #e8c840',
-        boxShadow:      '0 4px 20px rgba(0,0,0,0.5), 0 0 20px rgba(232, 200, 64, 0.4)',
+        boxShadow:      '0 4px 20px rgba(0,0,0,0.5), 0 0 16px rgba(232,200,64,0.3)',
+        borderRadius:   '50%',
+        width:          '64px',
+        height:         '64px',
         alignItems:     'center',
         justifyContent: 'center',
+        fontSize:       '28px',
+        color:          '#ffffff',
         cursor:         'grab',
         userSelect:     'none',
         touchAction:    'none',
@@ -1578,39 +1579,14 @@ function createOrb() {
         top:            'auto',
     });
 
-    // Restore saved position, or use safe default
-    // Check saved values are sane for current viewport BEFORE applying
-    const savedLeft   = localStorage.getItem('el_orb_left');
-    const savedBottom = localStorage.getItem('el_orb_bottom');
-    const parsedLeft  = parseInt(savedLeft);
-    const parsedBottom = parseInt(savedBottom);
-    const vw = window.innerWidth, vh = window.innerHeight;
-
-    if (!isNaN(parsedLeft) && parsedLeft >= 0 && parsedLeft < vw - 20 &&
-        !isNaN(parsedBottom) && parsedBottom >= 0 && parsedBottom < vh - 20) {
-        orb.style.left   = savedLeft;
-        orb.style.bottom = savedBottom;
-    } else {
-        orb.style.left   = '16px';
-        orb.style.bottom = '160px';
-        localStorage.removeItem('el_orb_left');
-        localStorage.removeItem('el_orb_bottom');
-    }
+    // Nuke stale position — desktop values are offscreen on mobile
+    localStorage.removeItem('el_orb_left');
+    localStorage.removeItem('el_orb_bottom');
+    orb.style.left   = '16px';
+    orb.style.bottom = '160px';
 
     // Append to <html> — escapes stacking context traps on <body>
     document.documentElement.appendChild(orb);
-
-    // Clamp to viewport after paint (desktop-saved position may be offscreen on mobile)
-    requestAnimationFrame(() => {
-        const rect = orb.getBoundingClientRect();
-        const vw = window.innerWidth, vh = window.innerHeight;
-        if (rect.right < 10 || rect.left > vw - 10 || rect.top > vh - 10 || rect.bottom < 10) {
-            orb.style.left   = '16px';
-            orb.style.bottom = '160px';
-            localStorage.removeItem('el_orb_left');
-            localStorage.removeItem('el_orb_bottom');
-        }
-    });
 
     // ── Drag logic ────────────────────────────────────────────────────
     let startX, startY, startLeft, startBottom, dragged = false;
