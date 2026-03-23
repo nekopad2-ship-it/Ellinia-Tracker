@@ -449,7 +449,6 @@ function renderCharPanel(char) {
         <div class="el-ident-row">
             <span class="el-ident-label">Class:</span>
             <span class="el-editable" data-cid="${cid}" data-f="class" contenteditable="true">${escapeHtml(char.class) || '—'}</span>
-            ${rankBadge(char.classRank)}
         </div>
         <div class="el-ident-row">
             <span class="el-ident-label">ADV:</span>
@@ -466,12 +465,12 @@ function renderCharPanel(char) {
     html += `<div class="el-section">
         <div class="el-bar-row">
             <span class="el-bar-label">HP</span>
-            <div class="el-bar-track"><div class="el-bar-fill el-hp${hpPct < 25 ? ' critical' : ''}" style="width:${hpPct}%"></div></div>
+            <div class="el-bar-track el-clickbar" style="cursor:pointer" data-bar-cid="${cid}" data-bar-f="hp.current" data-bar-max="${char.hp.max}"><div class="el-bar-fill el-hp${hpPct < 25 ? ' critical' : ''}" style="width:${hpPct}%"></div></div>
             <span class="el-hpmp-val"><input class="el-vi" type="number" data-cid="${cid}" data-f="hp.current" value="${char.hp.current}" min="0"/>/<input class="el-vi" type="number" data-cid="${cid}" data-f="hp.max" value="${char.hp.max}" min="1"/></span>
         </div>
         <div class="el-bar-row">
             <span class="el-bar-label">MP</span>
-            <div class="el-bar-track"><div class="el-bar-fill el-mp" style="width:${mpPct}%"></div></div>
+            <div class="el-bar-track el-clickbar" style="cursor:pointer" data-bar-cid="${cid}" data-bar-f="mana.current" data-bar-max="${char.mana.max}"><div class="el-bar-fill el-mp" style="width:${mpPct}%"></div></div>
             <span class="el-hpmp-val"><input class="el-vi" type="number" data-cid="${cid}" data-f="mana.current" value="${char.mana.current}" min="0"/>/<input class="el-vi" type="number" data-cid="${cid}" data-f="mana.max" value="${char.mana.max}" min="1"/></span>
         </div>
     </div>`;
@@ -522,7 +521,7 @@ function renderCharPanel(char) {
                 const over = val >= capped;
                 return `<div class="el-stat${over?' overcap':''}">
                     <span class="el-stat-name">${s}</span>
-                    <div class="el-stat-track"><div class="el-stat-fill" style="width:${pct}%"></div></div>
+                    <div class="el-stat-track el-clickbar" style="cursor:pointer" data-bar-cid="${cid}" data-bar-f="stat.${s}" data-bar-max="20"><div class="el-stat-fill" style="width:${pct}%"></div></div>
                     <div class="el-stat-edit-row">
                         <button class="el-pm-btn" data-cid="${cid}" data-f="stats.${s}" data-d="-1">−</button>
                         <span class="el-stat-val">${val}</span>
@@ -545,7 +544,7 @@ function renderCharPanel(char) {
                 <div class="el-disc-icon">${DISC_ICONS[d]||'◆'}</div>
                 <div class="el-disc-info">
                     <div class="el-disc-label">${d}</div>
-                    <div class="el-bar-track slim"><div class="el-bar-fill el-xp" style="width:${pct}%"></div></div>
+                    <div class="el-bar-track slim el-clickbar" style="cursor:pointer" data-bar-cid="${cid}" data-bar-f="disc.${d}" data-bar-max="${toNext}"><div class="el-bar-fill el-xp" style="width:${pct}%"></div></div>
                 </div>
                 <div class="el-pm-btns">
                     <button class="el-pm-btn small" data-cid="${cid}" data-f="disc.${d}" data-d="-1">−</button>
@@ -685,7 +684,7 @@ function initEditDelegation(hud) {
             const f     = pmBtn.dataset.f;
             const delta = parseInt(pmBtn.dataset.d);
             if (!char || isNaN(delta)) return;
-            if      (f.startsWith('stats.'))      { const s = f.slice(6); char.stats[s] = Math.max(0,(char.stats[s]||0)+delta); }
+            if      (f.startsWith('stats.'))      { const s = f.slice(6); char.stats[s] = Math.max(0, Math.min(20, (char.stats[s]||0)+delta)); }
             else if (f.startsWith('disc.'))       { const d = f.slice(5); if (char.disciplines?.[d]) char.disciplines[d].level = Math.max(1,(char.disciplines[d].level||1)+delta); }
             else if (f === 'threadSightLevel')    { char.threadSightLevel = Math.max(0,Math.min(5,(char.threadSightLevel||0)+delta)); }
             else if (f === 'greatSageLevel')      { char.greatSageLevel   = Math.max(0,Math.min(5,(char.greatSageLevel||0)+delta)); }
@@ -760,6 +759,25 @@ function initEditDelegation(hud) {
             const cycles = { Alpha:['neutral','rut'], Omega:['neutral','heat'], Beta:['neutral'] };
             const seq = cycles[char.aboGender] || ['neutral'];
             char.aboStatus = seq[(seq.indexOf(char.aboStatus)+1) % seq.length];
+            saveState(); renderHUD(); return;
+        }
+
+        // ── Click-on-bar: set value from click position ───────────────
+        const clickBar = e.target.closest('.el-clickbar[data-bar-cid]');
+        if (clickBar) {
+            e.stopPropagation();
+            const char = getCharByKey(clickBar.dataset.barCid);
+            if (!char) return;
+            const rect  = clickBar.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const pct   = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+            const max   = parseFloat(clickBar.dataset.barMax);
+            const f     = clickBar.dataset.barF;
+            const val   = Math.round(pct * max);
+            if      (f === 'hp.current')       char.hp.current   = Math.max(0, Math.min(val, char.hp.max));
+            else if (f === 'mana.current')     char.mana.current = Math.max(0, Math.min(val, char.mana.max));
+            else if (f.startsWith('stat.'))    { const s = f.slice(5); char.stats[s] = Math.max(0, Math.min(20, val)); }
+            else if (f.startsWith('disc.'))    { const d = f.slice(5); if (char.disciplines?.[d]) char.disciplines[d].xp = Math.max(0, val); }
             saveState(); renderHUD(); return;
         }
     });
