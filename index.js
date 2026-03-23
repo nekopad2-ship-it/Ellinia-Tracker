@@ -398,32 +398,23 @@ function renderPlayerTab() {
     const activeChar = isUser ? settings.state.player : settings.state.charPlayer;
     const sc         = settings.state.scene || {};
 
-    // ── Portrait cards ────────────────────────────────────────────────
-    function portraitCard(char, avatar, label, isActive) {
-        const aboColor = STATUS_COLORS[char.aboStatus] || null;
-        const statusPill = char.aboStatus !== 'neutral'
-            ? `<span class="el-portrait-status" style="background:${aboColor}22;border-color:${aboColor}88;color:${aboColor}">${char.aboStatus.toUpperCase()}</span>`
-            : `<span class="el-portrait-status el-portrait-status-abo">${ABO_ICONS[char.aboGender] || '◇'} ${char.aboGender}</span>`;
-        const initial  = (char.name || label).charAt(0).toUpperCase();
-        const viewKey  = char.isPlayer ? 'user' : 'char';
-        return `<div class="el-portrait-card${isActive ? ' active' : ''}" data-view="${viewKey}">
-            <div class="el-portrait-img-wrap">
+    // ── Circle avatars ────────────────────────────────────────────────
+    function avatarCircle(char, avatar, label, isActive) {
+        const initial = (char.name || label).charAt(0).toUpperCase();
+        const viewKey = char.isPlayer ? 'user' : 'char';
+        return `<div class="el-av-wrap${isActive ? ' active' : ''}" data-view="${viewKey}">
+            <div class="el-av-circle">
                 ${avatar
-                    ? `<img class="el-portrait-img" src="${avatar}" alt="${escapeHtml(char.name)}" onerror="this.style.display='none'"/>`
-                    : `<div class="el-portrait-placeholder">${initial}</div>`}
-                <div class="el-portrait-overlay"></div>
+                    ? `<img class="el-av-img" src="${avatar}" alt="${escapeHtml(char.name)}" onerror="this.style.display='none'"/>`
+                    : `<span class="el-av-initial">${initial}</span>`}
             </div>
-            ${statusPill}
-            <div class="el-portrait-footer">
-                <div class="el-portrait-name">${escapeHtml(char.name || label)}</div>
-                <div class="el-portrait-sub">∑ Lv.${totalLevel(char)}</div>
-            </div>
+            <span class="el-av-label">${escapeHtml(char.name || label)}</span>
         </div>`;
     }
 
-    let html = `<div class="el-portrait-row">
-        ${portraitCard(settings.state.player,     userAvatar, userName, isUser)}
-        ${portraitCard(settings.state.charPlayer, charAvatar, charName, !isUser)}
+    let html = `<div class="el-av-row">
+        ${avatarCircle(settings.state.player,     userAvatar, userName, isUser)}
+        ${avatarCircle(settings.state.charPlayer, charAvatar, charName, !isUser)}
     </div>`;
 
     // ── Page toggle ───────────────────────────────────────────────────
@@ -437,55 +428,54 @@ function renderPlayerTab() {
         ? renderCharOverview(activeChar)
         : renderCharLoadout(activeChar);
 
-    // ── Scene tracker — always shows ──────────────────────────────────
-    html += `<div class="el-scene-section">
-        <div class="el-sec-title" style="margin-bottom:0.5em">◉ SCENE</div>
-        <div class="el-scene-grid">
-            <div class="el-scene-row">
-                <span class="el-scene-label">Location</span>
-                <div class="el-editable el-scene-field" data-sf="location" contenteditable="true">${sc.location || '<span style="opacity:0.35;font-style:italic">Where are you?</span>'}</div>
+    // ── Scene + Focus — Overview only ─────────────────────────────────
+    if (_playerPage === 'overview') {
+        html += `<div class="el-scene-section">
+            <div class="el-sec-title" style="margin-bottom:0.5em">◉ SCENE</div>
+            <div class="el-scene-grid">
+                <div class="el-scene-row">
+                    <span class="el-scene-label">Location</span>
+                    <div class="el-editable el-scene-field" data-sf="location" contenteditable="true">${sc.location || '<span style="opacity:0.35;font-style:italic">Where are you?</span>'}</div>
+                </div>
+                <div class="el-scene-row">
+                    <span class="el-scene-label">Time</span>
+                    <div class="el-editable el-scene-field" data-sf="time" contenteditable="true">${sc.time || '<span style="opacity:0.35;font-style:italic">Time of day, weather…</span>'}</div>
+                </div>
+                <div class="el-scene-row">
+                    <span class="el-scene-label">Mood</span>
+                    <div class="el-editable el-scene-field" data-sf="mood" contenteditable="true">${sc.mood || '<span style="opacity:0.35;font-style:italic">Atmosphere, tension…</span>'}</div>
+                </div>
             </div>
-            <div class="el-scene-row">
-                <span class="el-scene-label">Time</span>
-                <div class="el-editable el-scene-field" data-sf="time" contenteditable="true">${sc.time || '<span style="opacity:0.35;font-style:italic">Time of day, weather…</span>'}</div>
-            </div>
-            <div class="el-scene-row">
-                <span class="el-scene-label">Mood</span>
-                <div class="el-editable el-scene-field" data-sf="mood" contenteditable="true">${sc.mood || '<span style="opacity:0.35;font-style:italic">Atmosphere, tension…</span>'}</div>
+            <div class="el-scene-events-wrap">
+                <div class="el-scene-events-header">
+                    <span class="el-scene-label" style="font-size:0.7rem;letter-spacing:0.08em">RECENT EVENTS</span>
+                    <button class="el-btn tiny el-scene-event-add">+ Add</button>
+                </div>
+                <div class="el-scene-events-list">
+                    ${(sc.events || []).length === 0
+                        ? '<div class="el-empty" style="font-size:0.75rem;padding:0.25em 0">None yet</div>'
+                        : (sc.events || []).map((ev, i) => `
+                            <div class="el-scene-event-row">
+                                <span class="el-scene-event-bullet">◆</span>
+                                <div class="el-editable el-scene-event-text" data-sei="${i}" contenteditable="true">${escapeHtml(ev)}</div>
+                                <button class="el-rm-btn el-scene-event-rm" data-sei="${i}">✕</button>
+                            </div>`).join('')}
+                </div>
             </div>
         </div>
-        <div class="el-scene-events-wrap">
-            <div class="el-scene-events-header">
-                <span class="el-scene-label" style="font-size:0.7rem;letter-spacing:0.08em">RECENT EVENTS</span>
-                <button class="el-btn tiny el-scene-event-add">+ Add</button>
-            </div>
-            <div class="el-scene-events-list">
-                ${(sc.events || []).length === 0
-                    ? '<div class="el-empty" style="font-size:0.75rem;padding:0.25em 0">None yet</div>'
-                    : (sc.events || []).map((ev, i) => `
-                        <div class="el-scene-event-row">
-                            <span class="el-scene-event-bullet">◆</span>
-                            <div class="el-editable el-scene-event-text" data-sei="${i}" contenteditable="true">${escapeHtml(ev)}</div>
-                            <button class="el-rm-btn el-scene-event-rm" data-sei="${i}">✕</button>
-                        </div>`).join('')}
-            </div>
-        </div>
-    </div>
-
-    <div class="el-scene-section" style="margin-top:0.4em">
-        <div class="el-sec-title" style="margin-bottom:0.4em">◎ CURRENT FOCUS</div>
-        <div class="el-editable el-scene-field el-focus-field" data-sf="focus" contenteditable="true"
-            style="min-height:2em;font-style:italic">${sc.focus || '<span style="opacity:0.35;font-style:italic">What is the character working towards right now?</span>'}</div>
-    </div>`;
+        <div class="el-scene-section" style="margin-top:0.4em">
+            <div class="el-sec-title" style="margin-bottom:0.4em">◎ CURRENT FOCUS</div>
+            <div class="el-editable el-scene-field el-focus-field" data-sf="focus" contenteditable="true"
+                style="min-height:2em;font-style:italic">${sc.focus || '<span style="opacity:0.35;font-style:italic">What is the character working towards right now?</span>'}</div>
+        </div>`;
+    }
 
     return html;
 }
 
 // ─── CHARACTER PANEL — OVERVIEW (page 1) ──────────────────────────────────────
-// Identity, HP/MP, Thread Sight / Great Sage, Stats
 
 function renderCharOverview(char) {
-    const capped   = 20;
     const cid      = char.isPlayer ? '__player__' : char.isCharPlayer ? '__char__' : char.name;
     const aboColor = STATUS_COLORS[char.aboStatus] || 'var(--el-text-dim)';
     const advOpts  = RANK_ORDER.filter(r => r !== 'Mythic').map(r =>
@@ -493,45 +483,93 @@ function renderCharOverview(char) {
     const aboOpts  = ['Alpha','Beta','Omega'].map(g =>
         `<option value="${g}" ${char.aboGender === g ? 'selected' : ''}>${g}</option>`).join('');
 
-    let html = `<div class="el-identity">
-        <div class="el-editable el-ident-name" data-cid="${cid}" data-f="name" contenteditable="true">${escapeHtml(char.name) || '—'}</div>
-        <div class="el-ident-row">
-            <span class="el-ident-label">Class:</span>
-            <span class="el-editable" data-cid="${cid}" data-f="class" contenteditable="true">${escapeHtml(char.class) || '—'}</span>
-        </div>
-        <div class="el-ident-row">
-            <span class="el-ident-label">ADV:</span>
-            <select class="el-rank-select" data-cid="${cid}" data-f="adventurerRank">${advOpts}</select>
-            <select class="el-rank-select el-abo-select" data-cid="${cid}" data-f="aboGender">${aboOpts}</select>
-            ${char.aboStatus !== 'neutral'
-                ? `<span class="el-abo-active el-abo-cycle" data-cid="${cid}" style="color:${aboColor};cursor:pointer" title="Click to cycle">[${char.aboStatus.toUpperCase()}]</span>`
-                : `<span class="el-abo-cycle el-abo-neutral" data-cid="${cid}" style="color:var(--el-text-dim);cursor:pointer" title="Click to set">○</span>`}
-            <span class="el-total-lv">∑ Lv.${totalLevel(char)}</span>
-        </div>
-        <div class="el-ident-row" style="align-items:flex-start;margin-top:4px">
-            <span class="el-ident-label" style="padding-top:2px">Look:</span>
-            <div class="el-editable el-appearance-edit" data-cid="${cid}" data-f="appearance" contenteditable="true"
-                style="flex:1;font-size:0.75rem;color:var(--el-text-dim);line-height:1.4;min-height:1.2em">${char.appearance || '<span style="opacity:0.35;font-style:italic">e.g. lean build, heat flush visible…</span>'}</div>
-        </div>
-    </div>`;
-
-    // HP / MP
+    // HP / MP percentages
     const hpPct = char.hp.max > 0 ? Math.min(100, Math.round((char.hp.current / char.hp.max) * 100)) : 0;
     const mpPct = char.mana.max > 0 ? Math.min(100, Math.round((char.mana.current / char.mana.max) * 100)) : 0;
-    html += `<div class="el-section">
-        <div class="el-bar-row">
-            <span class="el-bar-label">HP</span>
-            <div class="el-bar-track el-clickbar" style="cursor:pointer" data-bar-cid="${cid}" data-bar-f="hp.current" data-bar-max="${char.hp.max}"><div class="el-bar-fill el-hp${hpPct < 25 ? ' critical' : ''}" style="width:${hpPct}%"></div></div>
-            <span class="el-hpmp-val"><input class="el-vi" type="number" data-cid="${cid}" data-f="hp.current" value="${char.hp.current}" min="0"/>/<input class="el-vi" type="number" data-cid="${cid}" data-f="hp.max" value="${char.hp.max}" min="1"/></span>
+
+    // Thread Sight / Great Sage pill
+    let abilityPill = '';
+    if (char.isPlayer) {
+        const tsl = char.threadSightLevel || 0;
+        const pips = [1,2,3,4,5].map(i => `<span class="el-pill-pip${i<=tsl?' on':''}"></span>`).join('');
+        abilityPill = `<span class="el-pill el-pill-ts">◈ ${pips} Lv.${tsl}</span>`;
+    } else if (char.isCharPlayer) {
+        const gsl = char.greatSageLevel || 0;
+        const pips = [1,2,3,4,5].map(i => `<span class="el-pill-pip${i<=gsl?' on':''}"></span>`).join('');
+        abilityPill = `<span class="el-pill el-pill-ts">❋ ${pips} Lv.${gsl}</span>`;
+    }
+
+    // Status pill (only when not neutral)
+    const statusPill = char.aboStatus !== 'neutral'
+        ? `<span class="el-pill el-pill-status" style="background:${aboColor}22;border-color:${aboColor}66;color:${aboColor}">${char.aboStatus.toUpperCase()}</span>`
+        : '';
+
+    let html = `<div class="el-hero-block">
+
+        <div class="el-hero-top">
+            <div class="el-editable el-ident-name el-hero-name" data-cid="${cid}" data-f="name" contenteditable="true">${escapeHtml(char.name) || '—'}</div>
+            <span class="el-hero-lv">∑ Lv.${totalLevel(char)}</span>
         </div>
-        <div class="el-bar-row">
-            <span class="el-bar-label">MP</span>
-            <div class="el-bar-track el-clickbar" style="cursor:pointer" data-bar-cid="${cid}" data-bar-f="mana.current" data-bar-max="${char.mana.max}"><div class="el-bar-fill el-mp" style="width:${mpPct}%"></div></div>
-            <span class="el-hpmp-val"><input class="el-vi" type="number" data-cid="${cid}" data-f="mana.current" value="${char.mana.current}" min="0"/>/<input class="el-vi" type="number" data-cid="${cid}" data-f="mana.max" value="${char.mana.max}" min="1"/></span>
+
+        <div class="el-hero-bars">
+            <div class="el-hero-bar-col">
+                <div class="el-hero-bar-track el-clickbar" data-bar-cid="${cid}" data-bar-f="hp.current" data-bar-max="${char.hp.max}">
+                    <div class="el-bar-fill el-hp${hpPct < 25 ? ' critical' : ''}" style="width:${hpPct}%"></div>
+                </div>
+                <div class="el-hero-bar-vals">
+                    <span class="el-hero-bar-lbl">HP</span>
+                    <span class="el-hero-bar-num">
+                        <input class="el-vi" type="number" data-cid="${cid}" data-f="hp.current" value="${char.hp.current}" min="0"/>
+                        <span style="opacity:0.4">/</span>
+                        <input class="el-vi" type="number" data-cid="${cid}" data-f="hp.max" value="${char.hp.max}" min="1"/>
+                    </span>
+                </div>
+            </div>
+            <div class="el-hero-bar-col">
+                <div class="el-hero-bar-track el-clickbar" data-bar-cid="${cid}" data-bar-f="mana.current" data-bar-max="${char.mana.max}">
+                    <div class="el-bar-fill el-mp" style="width:${mpPct}%"></div>
+                </div>
+                <div class="el-hero-bar-vals">
+                    <span class="el-hero-bar-lbl">MP</span>
+                    <span class="el-hero-bar-num">
+                        <input class="el-vi" type="number" data-cid="${cid}" data-f="mana.current" value="${char.mana.current}" min="0"/>
+                        <span style="opacity:0.4">/</span>
+                        <input class="el-vi" type="number" data-cid="${cid}" data-f="mana.max" value="${char.mana.max}" min="1"/>
+                    </span>
+                </div>
+            </div>
         </div>
+
+        <div class="el-pills-row">
+            <span class="el-pill el-pill-class">
+                <span class="el-editable" data-cid="${cid}" data-f="class" contenteditable="true">${escapeHtml(char.class) || '—'}</span>
+            </span>
+            <span class="el-pill el-pill-adv">ADV
+                <select class="el-pill-select" data-cid="${cid}" data-f="adventurerRank">${advOpts}</select>
+            </span>
+            <span class="el-pill el-pill-abo">
+                <select class="el-pill-select" data-cid="${cid}" data-f="aboGender">${aboOpts}</select>
+            </span>
+            ${statusPill ? `<span class="el-abo-cycle" data-cid="${cid}" title="Click to cycle">${statusPill}</span>` : `<span class="el-abo-cycle el-abo-neutral" data-cid="${cid}" title="Click to set status" style="cursor:pointer"><span class="el-pill el-pill-neutral">○ neutral</span></span>`}
+            ${abilityPill}
+        </div>
+
+    </div>
+
+    <div class="el-bio-block">
+        <div class="el-editable el-bio-field" data-cid="${cid}" data-f="appearance" contenteditable="true">${char.appearance || '<span style="opacity:0.3;font-style:italic">Appearance… e.g. lean build, heat flush visible</span>'}</div>
     </div>`;
 
-    // Thread Sight
+    return html;
+}
+
+// ─── CHARACTER PANEL — LOADOUT (page 2) ───────────────────────────────────────
+
+function renderCharLoadout(char) {
+    const cid = char.isPlayer ? '__player__' : char.isCharPlayer ? '__char__' : char.name;
+    let html = '';
+
+    // ── Abilities (Thread Sight / Great Sage) ─────────────────────────
     if (char.isPlayer) {
         const tsl = char.threadSightLevel || 0;
         const tsd = ['—','Common legible','Uncommon legible','Rare legible + mana read','Weak point detection','Epic legible + full HUD'][tsl] || '?';
@@ -548,8 +586,6 @@ function renderCharOverview(char) {
             <div class="el-ts-desc-line">${tsd}</div>
         </div>`;
     }
-
-    // Great Sage
     if (char.isCharPlayer) {
         const gsl = char.greatSageLevel || 0;
         const gsd = ['—','Basic analysis','Combat threat alerts','Structural weakness detection','Tactical recommendations','Full battlefield omniscience'][gsl] || '?';
@@ -567,36 +603,24 @@ function renderCharOverview(char) {
         </div>`;
     }
 
-    // Stats
+    // ── Attributes — full-width fat boxes ────────────────────────────
     html += `<div class="el-section">
         <div class="el-sec-title">ATTRIBUTES</div>
-        <div class="el-stats-grid">
+        <div class="el-fatstat-grid">
             ${STATS.map(s => {
-                const val = char.stats?.[s] || 0;
-                const pct = Math.min(100, Math.round((val/capped)*100));
-                const over = val >= capped;
-                return `<div class="el-stat${over?' overcap':''}">
-                    <span class="el-stat-name">${s}</span>
-                    <div class="el-stat-track el-clickbar" style="cursor:pointer" data-bar-cid="${cid}" data-bar-f="stat.${s}" data-bar-max="20"><div class="el-stat-fill" style="width:${pct}%"></div></div>
-                    <div class="el-stat-edit-row">
-                        <button class="el-pm-btn" data-cid="${cid}" data-f="stats.${s}" data-d="-1">−</button>
-                        <span class="el-stat-val">${val}</span>
-                        <button class="el-pm-btn" data-cid="${cid}" data-f="stats.${s}" data-d="1">+</button>
+                const val  = char.stats?.[s] || 0;
+                const over = val >= 20;
+                return `<div class="el-fatstat${over ? ' overcap' : ''}">
+                    <button class="el-fatstat-btn el-pm-btn" data-cid="${cid}" data-f="stats.${s}" data-d="-1">−</button>
+                    <div class="el-fatstat-center">
+                        <span class="el-fatstat-name">${s}</span>
+                        <span class="el-fatstat-val">${val}</span>
                     </div>
+                    <button class="el-fatstat-btn el-pm-btn" data-cid="${cid}" data-f="stats.${s}" data-d="1">+</button>
                 </div>`;
             }).join('')}
         </div>
     </div>`;
-
-    return html;
-}
-
-// ─── CHARACTER PANEL — LOADOUT (page 2) ───────────────────────────────────────
-// Disciplines, Skills, Equipment, Inventory, Status Effects, Notes
-
-function renderCharLoadout(char) {
-    const cid = char.isPlayer ? '__player__' : char.isCharPlayer ? '__char__' : char.name;
-    let html = '';
 
     // Disciplines
     const DISC_ICONS = { Combat:'⚔', Crafting:'⚒', Magic:'✦', Trade:'⚖', Gathering:'⛏' };
@@ -816,9 +840,9 @@ function initEditDelegation(hud) {
         const pswWrap = e.target.closest('.el-psw-wrap[data-view]');
         if (pswWrap) { _activePlayerView = pswWrap.dataset.view; renderHUD(); return; }
 
-        // ── Portrait card select ──────────────────────────────────────
-        const portraitCard = e.target.closest('.el-portrait-card[data-view]');
-        if (portraitCard) { _activePlayerView = portraitCard.dataset.view; renderHUD(); return; }
+        // ── Avatar circle select ──────────────────────────────────────
+        const avWrap = e.target.closest('.el-av-wrap[data-view]');
+        if (avWrap) { _activePlayerView = avWrap.dataset.view; renderHUD(); return; }
 
         // ── Overview / Loadout page toggle ────────────────────────────
         const pageBtn = e.target.closest('.el-page-btn[data-page]');
