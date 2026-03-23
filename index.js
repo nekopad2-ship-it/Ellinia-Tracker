@@ -245,119 +245,15 @@ function escapeHtml(str) {
 }
 
 const _elLogEntries = [];
-function elLog(msg, level = 'info') {
+function elLog(msg) {
     const ts = new Date().toLocaleTimeString();
-    const entry = { ts, msg, level };
-    _elLogEntries.unshift(entry);
-    if (_elLogEntries.length > 100) _elLogEntries.pop();
-
-    // Write to HUD log panel (if it exists)
+    _elLogEntries.unshift(`[${ts}] ${msg}`);
+    if (_elLogEntries.length > 50) _elLogEntries.pop();
     const el = document.getElementById('el-debug-log');
-    if (el) el.innerHTML = _elLogEntries.map(l => {
-        const color = l.level === 'error' ? '#ff5555' : l.level === 'warn' ? '#e09c52' : '#88cc88';
-        return `<div class="el-log-line" style="color:${color}">[${l.ts}] ${escapeHtml(l.msg)}</div>`;
-    }).join('');
-
-    // Write to standalone mobile overlay (if it exists)
-    const overlay = document.getElementById('el-debug-overlay-log');
-    if (overlay) {
-        const color = level === 'error' ? '#ff5555' : level === 'warn' ? '#e09c52' : '#aaffaa';
-        const line = document.createElement('div');
-        line.style.cssText = `color:${color};font-size:11px;line-height:1.5;border-bottom:1px solid rgba(255,255,255,0.05);padding:2px 0;word-break:break-all`;
-        line.textContent = `[${ts}] ${msg}`;
-        overlay.prepend(line);
-        while (overlay.children.length > 100) overlay.removeChild(overlay.lastChild);
-    }
-
-    if (level === 'error') console.error('[EL]', msg);
-    else if (level === 'warn') console.warn('[EL]', msg);
-    else console.debug('[EL]', msg);
-}
-function elWarn(msg)  { elLog(msg, 'warn'); }
-function elError(msg) { elLog(msg, 'error'); }
-
-// ─── MOBILE DEBUG OVERLAY ──────────────────────────────────────────────────────
-// Self-contained — does NOT depend on HUD or any stylesheet. Activated by
-// long-pressing the orb (600ms). Shows env diagnostics + full log.
-
-function createDebugOverlay() {
-    if (document.getElementById('el-debug-overlay')) return;
-
-    const overlay = document.createElement('div');
-    overlay.id = 'el-debug-overlay';
-    Object.assign(overlay.style, {
-        position:        'fixed',
-        inset:           '0',
-        zIndex:          '2147483646',
-        background:      'rgba(10,10,20,0.97)',
-        color:           '#cccccc',
-        fontFamily:      'monospace',
-        fontSize:        '12px',
-        display:         'none',
-        flexDirection:   'column',
-        overflow:        'hidden',
-    });
-
-    overlay.innerHTML = `
-        <div id="el-dbg-header" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(232,200,64,0.12);border-bottom:1px solid #e8c84044;flex-shrink:0">
-            <span style="color:#e8c840;font-weight:bold;font-size:13px">◈ Ellinia Debug Log</span>
-            <div style="display:flex;gap:8px">
-                <button id="el-dbg-copy" style="background:#333;color:#eee;border:1px solid #555;border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer">Copy</button>
-                <button id="el-dbg-close" style="background:#552222;color:#eee;border:1px solid #773333;border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer">Close</button>
-            </div>
-        </div>
-        <div id="el-dbg-env" style="padding:10px 14px;background:rgba(255,255,255,0.03);border-bottom:1px solid #333;flex-shrink:0;font-size:11px;line-height:1.7;color:#aaaaaa"></div>
-        <div id="el-debug-overlay-log" style="flex:1;overflow-y:auto;padding:10px 14px"></div>
-    `;
-
-    document.body.appendChild(overlay);
-
-    overlay.querySelector('#el-dbg-close').addEventListener('click', () => {
-        overlay.style.display = 'none';
-    });
-
-    overlay.querySelector('#el-dbg-copy').addEventListener('click', () => {
-        const text = _elLogEntries.map(e => `[${e.ts}][${e.level}] ${e.msg}`).join('\n');
-        navigator.clipboard?.writeText(text).catch(() => {});
-    });
-}
-
-function showDebugOverlay() {
-    const overlay = document.getElementById('el-debug-overlay');
-    if (!overlay) return;
-
-    // Refresh env snapshot every time it's opened
-    const env = document.getElementById('el-dbg-env');
-    if (env) {
-        const orb     = document.getElementById('el-orb');
-        const hud     = document.getElementById('el-hud');
-        const orbRect = orb ? orb.getBoundingClientRect() : null;
-        const bodyOverflow  = getComputedStyle(document.body).overflow;
-        const htmlOverflow  = getComputedStyle(document.documentElement).overflow;
-        const bodyPos       = getComputedStyle(document.body).position;
-        env.innerHTML = [
-            `<b style="color:#e8c840">Environment</b>`,
-            `UA: ${navigator.userAgent.slice(0, 80)}`,
-            `Viewport: ${window.innerWidth}×${window.innerHeight}  devicePixelRatio: ${window.devicePixelRatio}`,
-            `&lt;html&gt; overflow: <span style="color:${htmlOverflow==='hidden'?'#ff8888':'#88ff88'}">${htmlOverflow}</span>  &lt;body&gt; overflow: <span style="color:${bodyOverflow==='hidden'?'#ff8888':'#88ff88'}">${bodyOverflow}</span>`,
-            `&lt;body&gt; position: ${bodyPos}`,
-            `#el-orb in DOM: <span style="color:${orb?'#88ff88':'#ff5555'}">${!!orb}</span>  parent: ${orb?.parentElement?.tagName ?? 'N/A'}`,
-            `#el-hud in DOM: <span style="color:${hud?'#88ff88':'#ff5555'}">${!!hud}</span>`,
-            orbRect ? `orb getBoundingClientRect: top:${Math.round(orbRect.top)} left:${Math.round(orbRect.left)} w:${Math.round(orbRect.width)} h:${Math.round(orbRect.height)} visible:${orbRect.width>0&&orbRect.height>0}` : 'orb rect: N/A',
-            orb ? `orb computed display: ${getComputedStyle(orb).display}  visibility: ${getComputedStyle(orb).visibility}  opacity: ${getComputedStyle(orb).opacity}` : '',
-        ].filter(Boolean).map(l => `<div>${l}</div>`).join('');
-    }
-
-    // Flush any buffered log entries into the overlay log
-    const logEl = document.getElementById('el-debug-overlay-log');
-    if (logEl && logEl.children.length === 0) {
-        logEl.innerHTML = _elLogEntries.map(e => {
-            const color = e.level === 'error' ? '#ff5555' : e.level === 'warn' ? '#e09c52' : '#aaffaa';
-            return `<div style="color:${color};font-size:11px;line-height:1.5;border-bottom:1px solid rgba(255,255,255,0.05);padding:2px 0;word-break:break-all">[${e.ts}] ${escapeHtml(e.msg)}</div>`;
-        }).join('');
-    }
-
-    overlay.style.display = 'flex';
+    if (el) el.innerHTML = _elLogEntries.map(l =>
+        `<div class="el-log-line">${escapeHtml(l)}</div>`
+    ).join('');
+    console.debug('[EL]', msg);
 }
 
 // ─── SETTINGS INIT ────────────────────────────────────────────────────────────
@@ -1652,25 +1548,15 @@ function bindTabs(hud) {
 // ─── ORB (MOBILE TRIGGER) ─────────────────────────────────────────────────────
 
 function createOrb() {
-    elLog('createOrb() called');
-
-    if (document.getElementById('el-orb')) {
-        elWarn('createOrb: #el-orb already exists, skipping');
-        return;
-    }
-
-    elLog(`createOrb: document.body exists = ${!!document.body}`);
-    elLog(`createOrb: viewport = ${window.innerWidth}×${window.innerHeight}`);
-    elLog(`createOrb: <html> overflow = ${getComputedStyle(document.documentElement).overflow}`);
-    elLog(`createOrb: <body> overflow = ${getComputedStyle(document.body).overflow}`);
-    elLog(`createOrb: <body> position = ${getComputedStyle(document.body).position}`);
+    if (document.getElementById('el-orb')) return;
 
     const orb = document.createElement('div');
     orb.id    = 'el-orb';
     orb.innerHTML = '<span style="pointer-events:none;font-size:24px;color:#e8c840;text-shadow:0 0 8px rgba(232,200,64,0.6)">◈</span>';
     orb.title = 'Ellinia Tracker';
 
-    // All visual properties are inline so they work regardless of stylesheet load order
+    // Every visual property must be inline — orb lives on <html> (not <body>)
+    // so CSS variables and stylesheets don't reach it reliably on mobile
     Object.assign(orb.style, {
         display:        'flex',
         position:       'fixed',
@@ -1686,56 +1572,27 @@ function createOrb() {
         fontSize:       '28px',
         color:          '#ffffff',
         cursor:         'grab',
-        userSelect:           'none',
-        webkitUserSelect:     'none',
+        userSelect:     'none',
         touchAction:    'none',
         webkitTapHighlightColor: 'transparent',
         right:          'auto',
         top:            'auto',
     });
 
-    // Restore saved position if it's still on-screen; otherwise use safe default.
-    const orbW = 64, orbH = 64;
-    const savedLeft   = parseFloat(localStorage.getItem('el_orb_left'));
-    const savedBottom = parseFloat(localStorage.getItem('el_orb_bottom'));
-    const safeLeft   = !isNaN(savedLeft)   && savedLeft   >= 0 && savedLeft   <= window.innerWidth  - orbW;
-    const safeBottom = !isNaN(savedBottom) && savedBottom >= 0 && savedBottom <= window.innerHeight - orbH;
-    orb.style.left   = (safeLeft   ? savedLeft   : 16)  + 'px';
-    orb.style.bottom = (safeBottom ? savedBottom : 160) + 'px';
-    elLog(`createOrb: position set — left:${orb.style.left} bottom:${orb.style.bottom} (savedLeft=${savedLeft} savedBottom=${savedBottom})`);
+    // Nuke stale position — desktop values are offscreen on mobile
+    localStorage.removeItem('el_orb_left');
+    localStorage.removeItem('el_orb_bottom');
+    orb.style.left   = '16px';
+    orb.style.bottom = '160px';
 
-    document.body.appendChild(orb);
-    elLog(`createOrb: appended to <${orb.parentElement?.tagName}>`);
-
-    // Verify it actually rendered
-    requestAnimationFrame(() => {
-        const rect = orb.getBoundingClientRect();
-        const computed = getComputedStyle(orb);
-        elLog(`createOrb [rAF]: getBoundingClientRect = top:${Math.round(rect.top)} left:${Math.round(rect.left)} w:${Math.round(rect.width)} h:${Math.round(rect.height)}`);
-        elLog(`createOrb [rAF]: computed display=${computed.display} visibility=${computed.visibility} opacity=${computed.opacity} zIndex=${computed.zIndex}`);
-        if (rect.width === 0 || rect.height === 0) {
-            elError('createOrb [rAF]: orb has zero size — likely clipped or hidden by a parent');
-            // Log the full ancestor chain
-            let node = orb.parentElement;
-            while (node && node !== document.documentElement) {
-                const s = getComputedStyle(node);
-                if (s.overflow !== 'visible' || s.display === 'none' || s.visibility === 'hidden' || parseFloat(s.opacity) === 0) {
-                    elError(`  problem ancestor: <${node.tagName}#${node.id||'?'}> overflow=${s.overflow} display=${s.display} visibility=${s.visibility} opacity=${s.opacity}`);
-                }
-                node = node.parentElement;
-            }
-        } else {
-            elLog('createOrb [rAF]: orb is visible ✓');
-        }
-    });
+    // Append to <html> — escapes stacking context traps on <body>
+    document.documentElement.appendChild(orb);
 
     // ── Drag logic ────────────────────────────────────────────────────
     let startX, startY, startLeft, startBottom, dragged = false;
-    let _longPressTimer = null;
 
     function onMove(e) {
         e.preventDefault();
-        clearTimeout(_longPressTimer);
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
         const dx = clientX - startX;
@@ -1749,7 +1606,6 @@ function createOrb() {
     }
 
     function onUp() {
-        clearTimeout(_longPressTimer);
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup',   onUp);
         document.removeEventListener('touchmove', onMove);
@@ -1775,13 +1631,6 @@ function createOrb() {
         startY      = e.touches[0].clientY;
         startLeft   = orb.offsetLeft;
         startBottom = window.innerHeight - orb.offsetTop - orb.offsetHeight;
-
-        // Long-press (600ms) opens the debug overlay on mobile
-        _longPressTimer = setTimeout(() => {
-            dragged = true; // prevent click handler
-            showDebugOverlay();
-        }, 600);
-
         document.addEventListener('touchmove', onMove, { passive: false });
         document.addEventListener('touchend',  onUp);
     }, { passive: true });
@@ -1789,8 +1638,6 @@ function createOrb() {
     orb.addEventListener('click', () => {
         if (!dragged) toggleMobilePanel();
     });
-
-    elLog('createOrb() complete');
 }
 
 function toggleMobilePanel() {
@@ -2029,64 +1876,122 @@ function hookEvents() {
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 
 jQuery(async () => {
-    elLog(`=== Ellinia Tracker v${EXT_VERSION} init ===`);
-    elLog(`UA: ${navigator.userAgent.slice(0, 120)}`);
-    elLog(`Viewport: ${window.innerWidth}×${window.innerHeight}  dpr: ${window.devicePixelRatio}`);
-    elLog(`document.body: ${!!document.body}  document.readyState: ${document.readyState}`);
 
-    try {
-        elLog('initSettings() start');
-        initSettings();
-        elLog('initSettings() OK');
-    } catch (e) {
-        elError(`initSettings() FAILED: ${e}`);
-        console.error('[Ellinia] initSettings:', e);
+    // ── DIAGNOSTIC PANEL ────────────────────────────────────────────────────────
+    // Completely standalone. No CSS file. No orb. No HUD. Fires first.
+    // On mobile: tap the yellow [EL] button at top-right to open the panel.
+
+    const _diagLogs = [];
+    function _diagLog(msg, level = 'info') {
+        _diagLogs.push({ msg, level, ts: new Date().toLocaleTimeString() });
+        console.log(`[Ellinia:${level}] ${msg}`);
     }
 
-    try {
-        elLog('loadChatState() start');
-        loadChatState();
-        elLog('loadChatState() OK');
-    } catch (e) {
-        elError(`loadChatState() FAILED: ${e}`);
-        console.error('[Ellinia] loadChatState:', e);
+    function _buildDiagPanel() {
+        // Button — always visible, top-right, above everything
+        const btn = document.createElement('button');
+        btn.id = 'el-diag-btn';
+        btn.textContent = '[EL]';
+        Object.assign(btn.style, {
+            position: 'fixed', top: '8px', right: '8px',
+            zIndex: '2147483647', padding: '6px 10px',
+            background: '#e8c840', color: '#111', fontWeight: 'bold',
+            fontSize: '12px', border: 'none', borderRadius: '6px',
+            cursor: 'pointer', fontFamily: 'monospace',
+        });
+
+        // Panel — hidden until button tap
+        const panel = document.createElement('div');
+        panel.id = 'el-diag-panel';
+        Object.assign(panel.style, {
+            position: 'fixed', inset: '0', zIndex: '2147483646',
+            background: 'rgba(10,10,20,0.97)', color: '#ccc',
+            fontFamily: 'monospace', fontSize: '11px',
+            display: 'none', flexDirection: 'column', overflow: 'hidden',
+        });
+
+        const header = document.createElement('div');
+        Object.assign(header.style, {
+            padding: '10px 14px', background: '#1a1a1a',
+            borderBottom: '1px solid #333', flexShrink: '0',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        });
+        header.innerHTML = '<span style="color:#e8c840;font-weight:bold">◈ Ellinia Diagnostics</span>';
+
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = '✕ Close';
+        Object.assign(closeBtn.style, {
+            background: '#333', color: '#eee', border: '1px solid #555',
+            borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontSize: '11px',
+        });
+        closeBtn.onclick = () => { panel.style.display = 'none'; };
+        header.appendChild(closeBtn);
+
+        const body = document.createElement('div');
+        body.id = 'el-diag-body';
+        Object.assign(body.style, { flex: '1', overflowY: 'auto', padding: '10px 14px' });
+
+        panel.appendChild(header);
+        panel.appendChild(body);
+        document.body.appendChild(btn);
+        document.body.appendChild(panel);
+
+        btn.onclick = () => {
+            // Rebuild content every tap so it reflects latest state
+            const orb  = document.getElementById('el-orb');
+            const hud  = document.getElementById('el-hud');
+            const orbRect = orb ? orb.getBoundingClientRect() : null;
+            const htmlCS  = getComputedStyle(document.documentElement);
+            const bodyCS  = getComputedStyle(document.body);
+
+            const env = [
+                `<b style="color:#e8c840">── Environment ──</b>`,
+                `Viewport: ${window.innerWidth}×${window.innerHeight}  dpr:${window.devicePixelRatio}`,
+                `UA: ${navigator.userAgent.slice(0,100)}`,
+                ``,
+                `<b style="color:#e8c840">── DOM / Layout ──</b>`,
+                `&lt;html&gt; overflow: <span style="color:${htmlCS.overflow==='hidden'?'#f88':'#8f8'}">${htmlCS.overflow}</span>  position: ${htmlCS.position}`,
+                `&lt;body&gt; overflow: <span style="color:${bodyCS.overflow==='hidden'?'#f88':'#8f8'}">${bodyCS.overflow}</span>  position: ${bodyCS.position}`,
+                `#el-orb in DOM: <span style="color:${orb?'#8f8':'#f55'}">${!!orb}</span>${orb ? `  parent: &lt;${orb.parentElement?.tagName}&gt;` : ''}`,
+                orb ? `orb rect: top:${Math.round(orbRect.top)} left:${Math.round(orbRect.left)} w:${Math.round(orbRect.width)} h:${Math.round(orbRect.height)}` : '',
+                orb ? `orb computed: display:${getComputedStyle(orb).display} visibility:${getComputedStyle(orb).visibility} opacity:${getComputedStyle(orb).opacity} zIndex:${getComputedStyle(orb).zIndex}` : '',
+                `#el-hud in DOM: <span style="color:${hud?'#8f8':'#f55'}">${!!hud}</span>`,
+                ``,
+                `<b style="color:#e8c840">── Init Log ──</b>`,
+            ].filter(l => l !== undefined).join('<br>');
+
+            const logs = _diagLogs.map(e => {
+                const c = e.level === 'error' ? '#f55' : e.level === 'warn' ? '#fa0' : '#8f8';
+                return `<div style="color:${c};border-bottom:1px solid #222;padding:2px 0">[${e.ts}] ${e.msg}</div>`;
+            }).join('');
+
+            body.innerHTML = `<div style="line-height:1.8;margin-bottom:12px">${env}</div>${logs || '<div style="color:#888">No log entries yet</div>'}`;
+            panel.style.display = 'flex';
+        };
     }
 
-    try {
-        elLog('createDebugOverlay() start');
-        createDebugOverlay();
-        elLog('createDebugOverlay() OK');
-    } catch (e) {
-        elError(`createDebugOverlay() FAILED: ${e}`);
-        console.error('[Ellinia] createDebugOverlay:', e);
-    }
+    _buildDiagPanel();
+    _diagLog('jQuery init fired');
+    _diagLog(`viewport: ${window.innerWidth}x${window.innerHeight}`);
+    _diagLog(`body exists: ${!!document.body}`);
 
-    try {
-        elLog('createOrb() start');
-        createOrb();
-    } catch (e) {
-        elError(`createOrb() FAILED: ${e}`);
-        console.error('[Ellinia] createOrb:', e);
-    }
+    // ── Normal init ─────────────────────────────────────────────────────────────
 
-    try {
-        elLog('createHUD() start');
-        createHUD();
-        elLog('createHUD() OK');
-    } catch (e) {
-        elError(`createHUD() FAILED: ${e}`);
-        console.error('[Ellinia] createHUD:', e);
-    }
+    try { initSettings();  _diagLog('initSettings OK'); }
+    catch (e) { _diagLog(`initSettings FAILED: ${e}`, 'error'); console.error('[Ellinia] initSettings:', e); }
 
-    try {
-        elLog('hookEvents() start');
-        hookEvents();
-        elLog('hookEvents() OK');
-    } catch (e) {
-        elError(`hookEvents() FAILED: ${e}`);
-        console.error('[Ellinia] hookEvents:', e);
-    }
+    try { loadChatState(); _diagLog('loadChatState OK'); }
+    catch (e) { _diagLog(`loadChatState FAILED: ${e}`, 'error'); console.error('[Ellinia] loadChatState:', e); }
 
-    elLog(`=== Init complete ===`);
+    try { createOrb();     _diagLog('createOrb OK'); }
+    catch (e) { _diagLog(`createOrb FAILED: ${e}`, 'error'); console.error('[Ellinia] createOrb:', e); }
+
+    try { createHUD();     _diagLog('createHUD OK'); }
+    catch (e) { _diagLog(`createHUD FAILED: ${e}`, 'error'); console.error('[Ellinia] createHUD:', e); }
+
+    try { hookEvents();    _diagLog('hookEvents OK'); }
+    catch (e) { _diagLog(`hookEvents FAILED: ${e}`, 'error'); console.error('[Ellinia] hookEvents:', e); }
+
+    _diagLog('init complete');
     console.log(`[Ellinia Tracker v${EXT_VERSION}] Initialized`);
 });
