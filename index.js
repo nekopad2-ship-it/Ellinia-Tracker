@@ -1576,20 +1576,23 @@ function createOrb() {
         touchAction:    'none',
         webkitTapHighlightColor: 'transparent',
         right:          'auto',
-        top:            'auto',
+        bottom:         'auto',
     });
 
-    // Nuke stale position — desktop values are offscreen on mobile
-    localStorage.removeItem('el_orb_left');
-    localStorage.removeItem('el_orb_bottom');
-    orb.style.left   = '16px';
-    orb.style.bottom = '160px';
+    // Use top instead of bottom — on mobile ST, <body> is position:fixed which
+    // gives <html> an effective height of 0, making bottom:Xpx calculate from 0
+    // and place the orb off-screen above the viewport.
+    const savedLeft = parseFloat(localStorage.getItem('el_orb_left'));
+    const savedTop  = parseFloat(localStorage.getItem('el_orb_top'));
+    const defaultTop = window.innerHeight - 224; // near bottom of screen
+    orb.style.left = (!isNaN(savedLeft) && savedLeft >= 0 && savedLeft <= window.innerWidth  - 64 ? savedLeft : 16) + 'px';
+    orb.style.top  = (!isNaN(savedTop)  && savedTop  >= 0 && savedTop  <= window.innerHeight - 64 ? savedTop  : defaultTop) + 'px';
 
-    // Append to <html> — escapes stacking context traps on <body>
-    document.documentElement.appendChild(orb);
+    // Append to <body> — body is position:fixed on mobile ST so it IS the viewport
+    document.body.appendChild(orb);
 
     // ── Drag logic ────────────────────────────────────────────────────
-    let startX, startY, startLeft, startBottom, dragged = false;
+    let startX, startY, startLeft, startTop, dragged = false;
 
     function onMove(e) {
         e.preventDefault();
@@ -1598,11 +1601,12 @@ function createOrb() {
         const dx = clientX - startX;
         const dy = clientY - startY;
         if (Math.abs(dx) + Math.abs(dy) > 5) dragged = true;
-        const newLeft   = Math.max(0, Math.min(window.innerWidth  - orb.offsetWidth,  startLeft   + dx));
-        const newBottom = Math.max(0, Math.min(window.innerHeight - orb.offsetHeight, startBottom - dy));
-        orb.style.left   = newLeft   + 'px';
-        orb.style.bottom = newBottom + 'px';
+        const newLeft = Math.max(0, Math.min(window.innerWidth  - orb.offsetWidth,  startLeft + dx));
+        const newTop  = Math.max(0, Math.min(window.innerHeight - orb.offsetHeight, startTop  + dy));
+        orb.style.left  = newLeft + 'px';
+        orb.style.top   = newTop  + 'px';
         orb.style.right  = 'auto';
+        orb.style.bottom = 'auto';
     }
 
     function onUp() {
@@ -1610,27 +1614,27 @@ function createOrb() {
         document.removeEventListener('mouseup',   onUp);
         document.removeEventListener('touchmove', onMove);
         document.removeEventListener('touchend',  onUp);
-        localStorage.setItem('el_orb_left',   orb.style.left);
-        localStorage.setItem('el_orb_bottom', orb.style.bottom);
+        localStorage.setItem('el_orb_left', orb.style.left);
+        localStorage.setItem('el_orb_top',  orb.style.top);
     }
 
     orb.addEventListener('mousedown', e => {
-        dragged = false;
-        startX      = e.clientX;
-        startY      = e.clientY;
-        startLeft   = orb.offsetLeft;
-        startBottom = window.innerHeight - orb.offsetTop - orb.offsetHeight;
+        dragged  = false;
+        startX   = e.clientX;
+        startY   = e.clientY;
+        startLeft = orb.offsetLeft;
+        startTop  = orb.offsetTop;
         document.addEventListener('mousemove', onMove);
         document.addEventListener('mouseup',   onUp);
         e.preventDefault();
     });
 
     orb.addEventListener('touchstart', e => {
-        dragged = false;
-        startX      = e.touches[0].clientX;
-        startY      = e.touches[0].clientY;
-        startLeft   = orb.offsetLeft;
-        startBottom = window.innerHeight - orb.offsetTop - orb.offsetHeight;
+        dragged  = false;
+        startX   = e.touches[0].clientX;
+        startY   = e.touches[0].clientY;
+        startLeft = orb.offsetLeft;
+        startTop  = orb.offsetTop;
         document.addEventListener('touchmove', onMove, { passive: false });
         document.addEventListener('touchend',  onUp);
     }, { passive: true });
@@ -1876,78 +1880,10 @@ function hookEvents() {
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 
 jQuery(async () => {
-    // ── ALWAYS-VISIBLE LOG BOX ───────────────────────────────────────────────
-    // No clicking. No interaction. Just renders on screen automatically.
-    const _logLines = [];
-    const _box = document.createElement('div');
-    Object.assign(_box.style, {
-        position:      'fixed',
-        top:           '0',
-        left:          '0',
-        right:         '0',
-        zIndex:        '2147483647',
-        background:    'rgba(0,0,0,0.92)',
-        color:         '#eee',
-        fontFamily:    'monospace',
-        fontSize:      '11px',
-        lineHeight:    '1.6',
-        padding:       '8px',
-        maxHeight:     '50vh',
-        overflowY:     'auto',
-        pointerEvents: 'none',
-    });
-    document.body.appendChild(_box);
-
-    function _log(msg, color) {
-        _logLines.push('<div style="color:' + (color || '#eee') + '">' + msg + '</div>');
-        _box.innerHTML = _logLines.join('');
-        console.log('[Ellinia]', msg);
-    }
-
-    _log('=== Ellinia init ===', '#e8c840');
-    _log('viewport: ' + window.innerWidth + 'x' + window.innerHeight);
-    _log('html overflow: ' + getComputedStyle(document.documentElement).overflow);
-    _log('body overflow: ' + getComputedStyle(document.body).overflow);
-    _log('body position: ' + getComputedStyle(document.body).position);
-    _log('UA: ' + navigator.userAgent.slice(0, 80));
-
-    try { initSettings();  _log('initSettings OK', '#8f8'); }
-    catch (e) { _log('initSettings FAILED: ' + e, '#f55'); }
-
-    try { loadChatState(); _log('loadChatState OK', '#8f8'); }
-    catch (e) { _log('loadChatState FAILED: ' + e, '#f55'); }
-
-    try {
-        createOrb();
-        _log('createOrb OK', '#8f8');
-        const orb = document.getElementById('el-orb');
-        if (orb) {
-            const r = orb.getBoundingClientRect();
-            const s = getComputedStyle(orb);
-            _log('orb parent: ' + (orb.parentElement ? orb.parentElement.tagName : 'NONE'));
-            _log('orb rect: top=' + Math.round(r.top) + ' left=' + Math.round(r.left) + ' w=' + Math.round(r.width) + ' h=' + Math.round(r.height));
-            _log('orb display=' + s.display + ' visibility=' + s.visibility + ' opacity=' + s.opacity + ' zIndex=' + s.zIndex);
-            if (r.width === 0 || r.height === 0) {
-                _log('ORB HAS ZERO SIZE — ancestor scan:', '#fa0');
-                let node = orb.parentElement;
-                while (node) {
-                    const cs = getComputedStyle(node);
-                    _log('&nbsp;&nbsp;<' + node.tagName + (node.id ? '#'+node.id : '') + '> overflow:' + cs.overflow + ' display:' + cs.display + ' visibility:' + cs.visibility);
-                    if (node === document.documentElement) break;
-                    node = node.parentElement;
-                }
-            }
-        } else {
-            _log('orb NOT in DOM after createOrb', '#f55');
-        }
-    } catch (e) { _log('createOrb FAILED: ' + e, '#f55'); }
-
-    try { createHUD();  _log('createHUD OK', '#8f8'); }
-    catch (e) { _log('createHUD FAILED: ' + e, '#f55'); }
-
-    try { hookEvents(); _log('hookEvents OK', '#8f8'); }
-    catch (e) { _log('hookEvents FAILED: ' + e, '#f55'); }
-
-    _log('=== init complete ===', '#e8c840');
+    try { initSettings(); }  catch (e) { console.error('[Ellinia] initSettings:', e); }
+    try { loadChatState(); } catch (e) { console.error('[Ellinia] loadChatState:', e); }
+    try { createOrb(); }     catch (e) { console.error('[Ellinia] createOrb:', e); }
+    try { createHUD(); }     catch (e) { console.error('[Ellinia] createHUD:', e); }
+    try { hookEvents(); }    catch (e) { console.error('[Ellinia] hookEvents:', e); }
     console.log(`[Ellinia Tracker v${EXT_VERSION}] Initialized`);
 });
