@@ -18,7 +18,8 @@ const RANK_COLORS = {
     C: '#52b0e0', B: '#c070f0', A: '#e09c52',
     S: '#f0e050', Mythic: '#ff5ab0'
 };
-const SOFT_CAPS = { F: 20, E: 35, D: 55, C: 80, B: 120, A: 180, S: 250 };
+// Stat hard cap: 20 for all attributes regardless of rank (matches lorebook v22)
+const STAT_CAP = 20;
 const DISCIPLINES = ['Combat', 'Crafting', 'Magic', 'Trade', 'Gathering'];
 const STATS       = ['STR', 'AGI', 'VIT', 'INT', 'WIS', 'LCK'];
 const EQUIP_SLOTS = ['weapon', 'helm', 'chest', 'gloves', 'boots', 'accessory1', 'accessory2'];
@@ -150,7 +151,7 @@ ABO SUBGENDER (hidden layer, not in Guild records):
 • Active status: neutral / heat (Omega) / rut (Alpha).
 
 THREAD SIGHT (player Ken's Goddess-gifted skill only — no NPC has this):
-• Level 1: Common-tier materials legible. Level 2: Uncommon. Level 3: Rare + mana reserve assessment. Level 4: weak point detection in combat. Level 5: Epic-tier, full HUD crafting expansion.
+• Level 1: Common-tier materials legible. Level 2: Uncommon. Level 3: Rare + mana reserve assessment. Level 4: weak point detection in combat. Level 5: Epic-tier, full HUD crafting expansion. Level 6: fate threads surface involuntarily (emotional/relational). Level 7: Legendary legible, fate voluntary. Level 8: mass production threshold, HUD duplication. Level 9: Unique partially legible, fate clarity. Level 10: full spectrum, fate at will.
 
 EQUIPMENT:
 • Slots: weapon, helm, chest, gloves, boots, accessory1, accessory2.
@@ -217,13 +218,18 @@ Return ONLY a valid JSON array. Each element represents one character with detec
 }
 
 SPECIAL ABILITIES:
-• Thread Sight ({{user}} only) — a Goddess-granted sensory skill. Levels 1–5. Upgrades when the narrative explicitly states Ken's Thread Sight improved or leveled up. Do NOT infer upgrades from general perception improvements.
-• Great Sage ({{char}} only) — a built-in analytical familiar. Levels 1–5. Stage names and triggers:
-  Lv.1 Ledger: outputs raw stats and hit probability only, no inference. Triggers when Great Sage is first invoked or gives basic combat data.
-  Lv.2 Ledger: elemental weaknesses and cooldown tracking added. Triggers when Great Sage tracks debuffs or resistances.
-  Lv.3 Ledger: multi-target comparison unlocked. Triggers when Great Sage compares multiple enemies or options simultaneously.
-  Lv.4 Analyst: reads battlefield flow, first conditional recommendations. Triggers when Great Sage gives if/then tactical advice.
-  Lv.5 Analyst: behavioral pattern recognition, basic intent inference in combat. Triggers when Great Sage predicts enemy behavior or intent.
+• Thread Sight ({{user}} only) — a Goddess-granted sensory skill. Levels 1–10. Upgrades when the narrative explicitly states Ken's Thread Sight improved or leveled up. Do NOT infer upgrades from general perception improvements.
+• Great Sage ({{char}} only) — a built-in analytical intelligence. Levels 1–10. Stage names and triggers:
+  Lv.1 Ledger: raw stats and hit probability only, no inference.
+  Lv.2 Ledger+: elemental weaknesses, cooldown tracking, environmental hazard flagging.
+  Lv.3 Ledger++: multi-target simultaneous assessment, resource optimization.
+  Lv.4 Analyst: battlefield flow reading, conditional if/then tactical recommendations.
+  Lv.5 Analyst+: behavioral pattern recognition, enemy intent inference, pre-emptive mistake flagging.
+  Lv.6 Analyst++: social pattern recognition beyond combat, deception/ABO detection.
+  Lv.7 Strategist: predictive modeling 2-3 moves ahead, cross-domain assessment.
+  Lv.8 Strategist+: multi-domain synthesis at speed, outputs arrive before the question is formed.
+  Lv.9 Strategist++: near-precognitive, detects anomalies before visible consequences.
+  Lv.10 Oracle: full analytical omniscience in range, outputs imply priorities the bearer did not request.
   Only increment greatSageLevel when the narrative explicitly shows Great Sage demonstrating a new capability tier. Do NOT increment for routine use of existing abilities.
 
 If nothing changed, return [].
@@ -491,11 +497,11 @@ function renderCharOverview(char) {
     let abilityPill = '';
     if (char.isPlayer) {
         const tsl = char.threadSightLevel || 0;
-        const pips = [1,2,3,4,5].map(i => `<span class="el-pill-pip${i<=tsl?' on':''}"></span>`).join('');
+        const pips = [1,2,3,4,5,6,7,8,9,10].map(i => `<span class="el-pill-pip${i<=tsl?' on':''}"></span>`).join('');
         abilityPill = `<span class="el-pill el-pill-ts">◈ ${pips} Lv.${tsl}</span>`;
     } else if (char.isCharPlayer) {
         const gsl = char.greatSageLevel || 0;
-        const pips = [1,2,3,4,5].map(i => `<span class="el-pill-pip${i<=gsl?' on':''}"></span>`).join('');
+        const pips = [1,2,3,4,5,6,7,8,9,10].map(i => `<span class="el-pill-pip${i<=gsl?' on':''}"></span>`).join('');
         abilityPill = `<span class="el-pill el-pill-ts">❋ ${pips} Lv.${gsl}</span>`;
     }
 
@@ -572,11 +578,11 @@ function renderCharLoadout(char) {
     // ── Abilities (Thread Sight / Great Sage) ─────────────────────────
     if (char.isPlayer) {
         const tsl = char.threadSightLevel || 0;
-        const tsd = ['—','Common legible','Uncommon legible','Rare legible + mana read','Weak point detection','Epic legible + full HUD'][tsl] || '?';
+        const tsd = ['—','Common legible','Uncommon legible','Rare + mana read','Weak point detection','Epic + full HUD','Fate threads surface','Legendary legible + fate voluntary','Mass production threshold','Unique partially legible + fate clarity','Full spectrum + fate at will'][tsl] || '?';
         html += `<div class="el-section el-ts-section">
             <div class="el-sec-title">◈ THREAD SIGHT</div>
             <div class="el-ts-row">
-                ${[1,2,3,4,5].map(i=>`<div class="el-ts-pip${i<=tsl?' active':''}" title="Level ${i}"></div>`).join('')}
+                ${[1,2,3,4,5,6,7,8,9,10].map(i=>`<div class="el-ts-pip${i<=tsl?' active':''}" title="Level ${i}"></div>`).join('')}
                 <span class="el-ts-desc" style="color:var(--el-text)">Lv.${tsl}</span>
                 <div class="el-pm-btns" style="margin-left:auto">
                     <button class="el-pm-btn" data-cid="${cid}" data-f="threadSightLevel" data-d="-1">−</button>
@@ -588,11 +594,11 @@ function renderCharLoadout(char) {
     }
     if (char.isCharPlayer) {
         const gsl = char.greatSageLevel || 0;
-        const gsd = ['—','Basic analysis','Combat threat alerts','Structural weakness detection','Tactical recommendations','Full battlefield omniscience'][gsl] || '?';
+        const gsd = ['—','Ledger: stats + hit probability','Ledger+: elemental weakness + cooldowns','Ledger++: multi-target comparison','Analyst: conditional tactical recs','Analyst+: pattern recognition + intent','Analyst++: social reads + ABO detection','Strategist: predictive modeling','Strategist+: multi-domain synthesis','Strategist++: near-precognitive','Oracle: full analytical omniscience'][gsl] || '?';
         html += `<div class="el-section el-ts-section">
             <div class="el-sec-title">❋ GREAT SAGE</div>
             <div class="el-ts-row">
-                ${[1,2,3,4,5].map(i=>`<div class="el-ts-pip${i<=gsl?' active':''}" title="Level ${i}"></div>`).join('')}
+                ${[1,2,3,4,5,6,7,8,9,10].map(i=>`<div class="el-ts-pip${i<=gsl?' active':''}" title="Level ${i}"></div>`).join('')}
                 <span class="el-ts-desc" style="color:var(--el-text)">Lv.${gsl}</span>
                 <div class="el-pm-btns" style="margin-left:auto">
                     <button class="el-pm-btn" data-cid="${cid}" data-f="greatSageLevel" data-d="-1">−</button>
@@ -804,8 +810,8 @@ function initEditDelegation(hud) {
             if (!char || isNaN(delta)) return;
             if      (f.startsWith('stats.'))      { const s = f.slice(6); char.stats[s] = Math.max(0, Math.min(20, (char.stats[s]||0)+delta)); }
             else if (f.startsWith('disc.'))       { const d = f.slice(5); if (char.disciplines?.[d]) char.disciplines[d].level = Math.max(1,(char.disciplines[d].level||1)+delta); }
-            else if (f === 'threadSightLevel')    { char.threadSightLevel = Math.max(0,Math.min(5,(char.threadSightLevel||0)+delta)); }
-            else if (f === 'greatSageLevel')      { char.greatSageLevel   = Math.max(0,Math.min(5,(char.greatSageLevel||0)+delta)); }
+            else if (f === 'threadSightLevel')    { char.threadSightLevel = Math.max(0,Math.min(10,(char.threadSightLevel||0)+delta)); }
+            else if (f === 'greatSageLevel')      { char.greatSageLevel   = Math.max(0,Math.min(10,(char.greatSageLevel||0)+delta)); }
             else if (f.startsWith('skill.level.')){ const i=parseInt(f.split('.')[2]); if(char.skills?.[i]) char.skills[i].level=Math.max(1,(char.skills[i].level||1)+delta); }
             else if (f.startsWith('inv.qty.'))    { const i=parseInt(f.split('.')[2]); if(char.inventory?.[i]) char.inventory[i].quantity=Math.max(1,(char.inventory[i].quantity||1)+delta); }
             else if (f.startsWith('fx.dur.'))     { const i=parseInt(f.split('.')[2]); if(char.statusEffects?.[i]) char.statusEffects[i].duration=Math.max(1,(char.statusEffects[i].duration??1)+delta); }
@@ -2139,11 +2145,11 @@ function formatChar(char, sections) {
     }
 
     if (char.isPlayer && char.threadSightLevel > 0) {
-        const tsd = ['—','Common legible','Uncommon legible','Rare legible+mana','Weak point detect','Epic+full HUD'][char.threadSightLevel] || `Lv.${char.threadSightLevel}`;
+        const tsd = ['—','Common legible','Uncommon legible','Rare+mana read','Weak point detect','Epic+full HUD','Fate threads','Legendary+fate voluntary','Mass production','Unique+fate clarity','Full spectrum'][char.threadSightLevel] || `Lv.${char.threadSightLevel}`;
         lines.push(`Thread Sight Lv.${char.threadSightLevel} — ${tsd}`);
     }
     if (char.isCharPlayer && char.greatSageLevel > 0) {
-        const gsd = ['—','Ledger: stats+hit%','Ledger: elemental+cooldowns','Ledger: multi-target','Analyst: conditional recs','Analyst: pattern+intent'][char.greatSageLevel] || `Lv.${char.greatSageLevel}`;
+        const gsd = ['—','Ledger: stats+hit%','Ledger+: elemental+cooldowns','Ledger++: multi-target','Analyst: conditional recs','Analyst+: pattern+intent','Analyst++: social+ABO','Strategist: predictive','Strategist+: multi-domain','Strategist++: precognitive','Oracle: omniscient'][char.greatSageLevel] || `Lv.${char.greatSageLevel}`;
         lines.push(`Great Sage Lv.${char.greatSageLevel} — ${gsd}`);
     }
 
