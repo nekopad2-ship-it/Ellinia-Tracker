@@ -294,6 +294,13 @@ function loadChatState() {
         if (!settings.state.quests)     settings.state.quests     = { main: [], side: [] };
         settings.state.player.isPlayer         = true;
         settings.state.charPlayer.isCharPlayer = true;
+        // Remove any NPC entry that duplicates the charPlayer (e.g. Hoshi added via preset)
+        const charKey = settings.state.charPlayer.name?.toLowerCase().trim();
+        if (charKey) {
+            for (const k of Object.keys(settings.state.npcs)) {
+                if (k.toLowerCase().trim() === charKey) delete settings.state.npcs[k];
+            }
+        }
     } else {
         settings.state = {
             player:     makeCharacter(playerName, true, {}, false),
@@ -881,6 +888,12 @@ function renderNPCCard(npc) {
             ${npc.aboStatus !== 'neutral'
                 ? `<span class="el-abo-active el-abo-cycle" data-cid="${cid}" style="color:${aboColor};cursor:pointer" title="Click to cycle">[${npc.aboStatus.toUpperCase()}]</span>`
                 : `<span class="el-abo-cycle el-abo-neutral" data-cid="${cid}" style="color:var(--el-text-dim);cursor:pointer" title="Click to set status">○</span>`}
+        </div>
+
+        <div class="el-ident-row" style="align-items:flex-start;margin-top:4px">
+            <span class="el-ident-label" style="padding-top:2px">Look:</span>
+            <div class="el-editable el-appearance-edit" data-cid="${cid}" data-f="appearance" contenteditable="true"
+                style="flex:1;font-size:0.75rem;color:var(--el-text-dim);line-height:1.4;min-height:1.2em">${npc.appearance || '<span style="opacity:0.35;font-style:italic">e.g. tall, silver-eyed, usually smirking…</span>'}</div>
         </div>`;
 
     // Status effects — collapsible, included because they feed into prompt injection
@@ -911,12 +924,15 @@ function renderNPCCard(npc) {
 }
 
 function renderNPCTab() {
-    const npcs   = settings.state.npcs;
-    const names  = Object.keys(npcs);
+    const npcs      = settings.state.npcs;
+    const charName  = (getContext().name2 || settings.state.charPlayer?.name || '').toLowerCase().trim();
 
-    // Build preset options
+    // Exclude charPlayer from both the preset list and the displayed roster
+    const names = Object.keys(npcs).filter(n => n.toLowerCase().trim() !== charName);
+
+    // Build preset options — exclude charPlayer and already-added NPCs
     const presetOptions = Object.keys(NPC_PRESETS)
-        .filter(n => !npcs[n])
+        .filter(n => !npcs[n] && n.toLowerCase().trim() !== charName)
         .map(n => `<option value="${n}">${n}</option>`)
         .join('');
 
