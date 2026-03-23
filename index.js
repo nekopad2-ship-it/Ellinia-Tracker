@@ -1876,127 +1876,78 @@ function hookEvents() {
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 
 jQuery(async () => {
+    // ── ALWAYS-VISIBLE LOG BOX ───────────────────────────────────────────────
+    // No clicking. No interaction. Just renders on screen automatically.
+    const _logLines = [];
+    const _box = document.createElement('div');
+    Object.assign(_box.style, {
+        position:      'fixed',
+        top:           '0',
+        left:          '0',
+        right:         '0',
+        zIndex:        '2147483647',
+        background:    'rgba(0,0,0,0.92)',
+        color:         '#eee',
+        fontFamily:    'monospace',
+        fontSize:      '11px',
+        lineHeight:    '1.6',
+        padding:       '8px',
+        maxHeight:     '50vh',
+        overflowY:     'auto',
+        pointerEvents: 'none',
+    });
+    document.body.appendChild(_box);
 
-    // ── DIAGNOSTIC PANEL ────────────────────────────────────────────────────────
-    // Completely standalone. No CSS file. No orb. No HUD. Fires first.
-    // On mobile: tap the yellow [EL] button at top-right to open the panel.
-
-    const _diagLogs = [];
-    function _diagLog(msg, level = 'info') {
-        _diagLogs.push({ msg, level, ts: new Date().toLocaleTimeString() });
-        console.log(`[Ellinia:${level}] ${msg}`);
+    function _log(msg, color) {
+        _logLines.push('<div style="color:' + (color || '#eee') + '">' + msg + '</div>');
+        _box.innerHTML = _logLines.join('');
+        console.log('[Ellinia]', msg);
     }
 
-    function _buildDiagPanel() {
-        // Button — always visible, top-right, above everything
-        const btn = document.createElement('button');
-        btn.id = 'el-diag-btn';
-        btn.textContent = '[EL]';
-        Object.assign(btn.style, {
-            position: 'fixed', top: '8px', right: '8px',
-            zIndex: '2147483647', padding: '6px 10px',
-            background: '#e8c840', color: '#111', fontWeight: 'bold',
-            fontSize: '12px', border: 'none', borderRadius: '6px',
-            cursor: 'pointer', fontFamily: 'monospace',
-        });
+    _log('=== Ellinia init ===', '#e8c840');
+    _log('viewport: ' + window.innerWidth + 'x' + window.innerHeight);
+    _log('html overflow: ' + getComputedStyle(document.documentElement).overflow);
+    _log('body overflow: ' + getComputedStyle(document.body).overflow);
+    _log('body position: ' + getComputedStyle(document.body).position);
+    _log('UA: ' + navigator.userAgent.slice(0, 80));
 
-        // Panel — hidden until button tap
-        const panel = document.createElement('div');
-        panel.id = 'el-diag-panel';
-        Object.assign(panel.style, {
-            position: 'fixed', top: '0', left: '0', right: '0', bottom: '0',
-            zIndex: '2147483646',
-            background: 'rgba(10,10,20,0.97)', color: '#ccc',
-            fontFamily: 'monospace', fontSize: '11px',
-            display: 'none', flexDirection: 'column', overflow: 'hidden',
-        });
+    try { initSettings();  _log('initSettings OK', '#8f8'); }
+    catch (e) { _log('initSettings FAILED: ' + e, '#f55'); }
 
-        const header = document.createElement('div');
-        Object.assign(header.style, {
-            padding: '10px 14px', background: '#1a1a1a',
-            borderBottom: '1px solid #333', flexShrink: '0',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        });
-        header.innerHTML = '<span style="color:#e8c840;font-weight:bold">◈ Ellinia Diagnostics</span>';
+    try { loadChatState(); _log('loadChatState OK', '#8f8'); }
+    catch (e) { _log('loadChatState FAILED: ' + e, '#f55'); }
 
-        const closeBtn = document.createElement('button');
-        closeBtn.textContent = '✕ Close';
-        Object.assign(closeBtn.style, {
-            background: '#333', color: '#eee', border: '1px solid #555',
-            borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontSize: '11px',
-        });
-        const doClose = () => { panel.style.display = 'none'; };
-        closeBtn.addEventListener('touchend', e => { e.preventDefault(); doClose(); });
-        closeBtn.addEventListener('click', doClose);
-        header.appendChild(closeBtn);
+    try {
+        createOrb();
+        _log('createOrb OK', '#8f8');
+        const orb = document.getElementById('el-orb');
+        if (orb) {
+            const r = orb.getBoundingClientRect();
+            const s = getComputedStyle(orb);
+            _log('orb parent: ' + (orb.parentElement ? orb.parentElement.tagName : 'NONE'));
+            _log('orb rect: top=' + Math.round(r.top) + ' left=' + Math.round(r.left) + ' w=' + Math.round(r.width) + ' h=' + Math.round(r.height));
+            _log('orb display=' + s.display + ' visibility=' + s.visibility + ' opacity=' + s.opacity + ' zIndex=' + s.zIndex);
+            if (r.width === 0 || r.height === 0) {
+                _log('ORB HAS ZERO SIZE — ancestor scan:', '#fa0');
+                let node = orb.parentElement;
+                while (node) {
+                    const cs = getComputedStyle(node);
+                    _log('&nbsp;&nbsp;<' + node.tagName + (node.id ? '#'+node.id : '') + '> overflow:' + cs.overflow + ' display:' + cs.display + ' visibility:' + cs.visibility);
+                    if (node === document.documentElement) break;
+                    node = node.parentElement;
+                }
+            }
+        } else {
+            _log('orb NOT in DOM after createOrb', '#f55');
+        }
+    } catch (e) { _log('createOrb FAILED: ' + e, '#f55'); }
 
-        const body = document.createElement('div');
-        body.id = 'el-diag-body';
-        Object.assign(body.style, { flex: '1', overflowY: 'auto', padding: '10px 14px' });
+    try { createHUD();  _log('createHUD OK', '#8f8'); }
+    catch (e) { _log('createHUD FAILED: ' + e, '#f55'); }
 
-        panel.appendChild(header);
-        panel.appendChild(body);
-        document.body.appendChild(btn);
-        document.body.appendChild(panel);
+    try { hookEvents(); _log('hookEvents OK', '#8f8'); }
+    catch (e) { _log('hookEvents FAILED: ' + e, '#f55'); }
 
-        const doOpen = () => {
-            // Rebuild content every tap so it reflects latest state
-            const orb  = document.getElementById('el-orb');
-            const hud  = document.getElementById('el-hud');
-            const orbRect = orb ? orb.getBoundingClientRect() : null;
-            const htmlCS  = getComputedStyle(document.documentElement);
-            const bodyCS  = getComputedStyle(document.body);
-
-            const env = [
-                `<b style="color:#e8c840">── Environment ──</b>`,
-                `Viewport: ${window.innerWidth}×${window.innerHeight}  dpr:${window.devicePixelRatio}`,
-                `UA: ${navigator.userAgent.slice(0,100)}`,
-                ``,
-                `<b style="color:#e8c840">── DOM / Layout ──</b>`,
-                `&lt;html&gt; overflow: <span style="color:${htmlCS.overflow==='hidden'?'#f88':'#8f8'}">${htmlCS.overflow}</span>  position: ${htmlCS.position}`,
-                `&lt;body&gt; overflow: <span style="color:${bodyCS.overflow==='hidden'?'#f88':'#8f8'}">${bodyCS.overflow}</span>  position: ${bodyCS.position}`,
-                `#el-orb in DOM: <span style="color:${orb?'#8f8':'#f55'}">${!!orb}</span>${orb ? `  parent: &lt;${orb.parentElement?.tagName}&gt;` : ''}`,
-                orb ? `orb rect: top:${Math.round(orbRect.top)} left:${Math.round(orbRect.left)} w:${Math.round(orbRect.width)} h:${Math.round(orbRect.height)}` : '',
-                orb ? `orb computed: display:${getComputedStyle(orb).display} visibility:${getComputedStyle(orb).visibility} opacity:${getComputedStyle(orb).opacity} zIndex:${getComputedStyle(orb).zIndex}` : '',
-                `#el-hud in DOM: <span style="color:${hud?'#8f8':'#f55'}">${!!hud}</span>`,
-                ``,
-                `<b style="color:#e8c840">── Init Log ──</b>`,
-            ].filter(l => l !== undefined).join('<br>');
-
-            const logs = _diagLogs.map(e => {
-                const c = e.level === 'error' ? '#f55' : e.level === 'warn' ? '#fa0' : '#8f8';
-                return `<div style="color:${c};border-bottom:1px solid #222;padding:2px 0">[${e.ts}] ${e.msg}</div>`;
-            }).join('');
-
-            body.innerHTML = `<div style="line-height:1.8;margin-bottom:12px">${env}</div>${logs || '<div style="color:#888">No log entries yet</div>'}`;
-            panel.style.display = 'flex';
-        };
-        btn.addEventListener('touchend', e => { e.preventDefault(); doOpen(); });
-        btn.addEventListener('click', doOpen);
-    }
-
-    _buildDiagPanel();
-    _diagLog('jQuery init fired');
-    _diagLog(`viewport: ${window.innerWidth}x${window.innerHeight}`);
-    _diagLog(`body exists: ${!!document.body}`);
-
-    // ── Normal init ─────────────────────────────────────────────────────────────
-
-    try { initSettings();  _diagLog('initSettings OK'); }
-    catch (e) { _diagLog(`initSettings FAILED: ${e}`, 'error'); console.error('[Ellinia] initSettings:', e); }
-
-    try { loadChatState(); _diagLog('loadChatState OK'); }
-    catch (e) { _diagLog(`loadChatState FAILED: ${e}`, 'error'); console.error('[Ellinia] loadChatState:', e); }
-
-    try { createOrb();     _diagLog('createOrb OK'); }
-    catch (e) { _diagLog(`createOrb FAILED: ${e}`, 'error'); console.error('[Ellinia] createOrb:', e); }
-
-    try { createHUD();     _diagLog('createHUD OK'); }
-    catch (e) { _diagLog(`createHUD FAILED: ${e}`, 'error'); console.error('[Ellinia] createHUD:', e); }
-
-    try { hookEvents();    _diagLog('hookEvents OK'); }
-    catch (e) { _diagLog(`hookEvents FAILED: ${e}`, 'error'); console.error('[Ellinia] hookEvents:', e); }
-
-    _diagLog('init complete');
+    _log('=== init complete ===', '#e8c840');
     console.log(`[Ellinia Tracker v${EXT_VERSION}] Initialized`);
 });
