@@ -1606,3 +1606,22 @@
     line-height: 1;
 }
 .el-fatstat.overcap .el-fatstat-val { color: var(--el-gold); }
+
+/* ─── NPC SCENE DOT ─────────────────────────────────────────────── */
+
+.el-npc-scene-dot {
+    font-size:   0.6rem;
+    color:       var(--el-text-dim);
+    opacity:     0.35;
+    cursor:      pointer;
+    flex-shrink: 0;
+    transition:  color 0.2s, opacity 0.2s;
+    user-select: none;
+    padding:     0 0.15em;
+}
+.el-npc-scene-dot:hover  { opacity: 0.7; }
+.el-npc-scene-dot.active {
+    color:       #52e05a;
+    opacity:     1;
+    text-shadow: 0 0 6px rgba(82, 224, 90, 0.4);
+}
