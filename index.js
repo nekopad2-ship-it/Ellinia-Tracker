@@ -36,14 +36,14 @@ const STATUS_COLORS = { neutral: '#6a8eaa', heat: '#e05252', rut: '#e09c52' };
 
 // NPC presets with known lore data
 const NPC_PRESETS = {
-    'Hoshi':           { class: 'Dual Blade',     classRank: 'B', aboGender: 'Alpha', adventurerRank: 'B' },
-    'Dokyeom':         { class: 'Blacksmith',      classRank: 'F', aboGender: 'Beta',  adventurerRank: 'F' },
-    'Mira':            { class: 'Guild Registrar', classRank: 'D', aboGender: 'Beta',  adventurerRank: 'D' },
-    'Commander Sera':  { class: 'Warrior',         classRank: 'A', aboGender: 'Beta',  adventurerRank: 'A' },
-    'Calder':          { class: 'Warrior',         classRank: 'C', aboGender: 'Beta',  adventurerRank: 'C' },
-    'Sable':           { class: 'Rogue',           classRank: 'B', aboGender: 'Beta',  adventurerRank: 'B' },
-    'Athena Pierce':   { class: 'Bowmaster',       classRank: 'A', aboGender: 'Beta',  adventurerRank: 'S' },
-    'Grendel':         { class: 'Archmage',        classRank: 'S', aboGender: 'Beta',  adventurerRank: 'S' },
+    'Hoshi':           { class: 'Dual Blade',     aboGender: 'Alpha', adventurerRank: 'B' },
+    'Dokyeom':         { class: 'Blacksmith',      aboGender: 'Beta',  adventurerRank: 'F' },
+    'Mira':            { class: 'Guild Registrar', aboGender: 'Beta',  adventurerRank: 'D' },
+    'Commander Sera':  { class: 'Warrior',         aboGender: 'Beta',  adventurerRank: 'A' },
+    'Calder':          { class: 'Warrior',         aboGender: 'Beta',  adventurerRank: 'C' },
+    'Sable':           { class: 'Rogue',           aboGender: 'Beta',  adventurerRank: 'B' },
+    'Athena Pierce':   { class: 'Bowmaster',       aboGender: 'Beta',  adventurerRank: 'S' },
+    'Grendel':         { class: 'Archmage',        aboGender: 'Beta',  adventurerRank: 'S' },
 };
 
 // ─── DATA FACTORIES ───────────────────────────────────────────────────────────
@@ -54,7 +54,6 @@ function makeCharacter(name = '', isPlayer = false, preset = {}, isCharPlayer = 
         isPlayer,
         isCharPlayer,
         class:          preset.class         || (isPlayer ? 'Blacksmith' : ''),
-        classRank:      preset.classRank      || 'F',
         aboGender:      preset.aboGender      || 'Beta',
         aboStatus:      'neutral',
         adventurerRank: preset.adventurerRank || 'F',
@@ -77,6 +76,7 @@ function makeCharacter(name = '', isPlayer = false, preset = {}, isCharPlayer = 
         threadSightLevel: isPlayer ? 1 : 0,
         greatSageLevel:   isCharPlayer ? 1 : 0,
         notes:            '',
+        inScene:          !isPlayer && !isCharPlayer,
     };
 }
 
@@ -87,7 +87,7 @@ const DEFAULT_SETTINGS = {
     contextMessages:   3,
     injectEnabled:     true,
     injectDepth:       0,
-    trackerInstruction: 'The [ELLINIA TRACKER] block reflects current character state. Let it inform dialogue, physical behaviour, ABO dynamics, and scene details naturally.',
+    trackerInstruction: '[ELLINIA TRACKER] is the current mechanical state of all characters. Stats, HP, MP, and levels are HUD data visible ONLY to Summoned Ones — Ellinians cannot perceive these numbers. ABO designation is concealed by default — characters do not know each other\'s designation unless it has been revealed in-scene. Use this data to inform physical behavior, capability limits, and scene details, but respect information boundaries: no character acts on data they have not personally observed or been told.',
     injectSections: {
         player:     true,
         charPlayer: true,
@@ -138,11 +138,12 @@ SKILLS:
 • Level 10 mastery is required before rank evolution is possible.
 
 CLASS SYSTEM:
-• Birthright class is immutable. Social rank F–S. Support classes (Blacksmith, Gatherer, Miner, Alchemist, Builder, Merchant, Armourer) are Rank F–D. Combat classes (Warrior, Mage, Rogue, Archer, Priest → advanced forms) are C–S.
-• Edge Sovereign is an S-class legendary that hides as Dual Blade (B) until triggered by near-death crisis.
+• Birthright class is immutable. The Guild issues a single rank from F through S based on trials and demonstrated capability.
+• Support classes (Blacksmith, Gatherer, Miner, Alchemist, Builder, Merchant, Armourer) are institutionally capped at Rank C. Combat classes (Warrior, Mage, Rogue, Archer, Priest → advanced forms) can reach Rank S.
+• Edge Sovereign is a legendary class that presents as Dual Blade until triggered by near-death crisis.
 
-ADVENTURER RANK:
-• Separate from class rank. F through S. Capped by class rank — support classes ceiling early.
+RANK:
+• Guild-issued rank from F through S. Support classes ceiling at Rank C. Combat classes can reach S.
 
 ABO SUBGENDER (hidden layer, not in Guild records):
 • Alpha: +STR floor, bonus VIT under stress, minor AGI spike in rut.
@@ -178,7 +179,6 @@ Return ONLY a valid JSON array. Each element represents one character with detec
     // Include ONLY fields that changed. All fields optional.
     "name": string,
     "class": string,
-    "classRank": string,
     "aboGender": "Alpha"|"Beta"|"Omega",
     "aboStatus": "neutral"|"heat"|"rut",
     "adventurerRank": string,
@@ -231,6 +231,8 @@ SPECIAL ABILITIES:
   Lv.9 Strategist++: near-precognitive, detects anomalies before visible consequences.
   Lv.10 Oracle: full analytical omniscience in range, outputs imply priorities the bearer did not request.
   Only increment greatSageLevel when the narrative explicitly shows Great Sage demonstrating a new capability tier. Do NOT increment for routine use of existing abilities.
+
+IMPORTANT: Use character names exactly as they appear in the roleplay text. For the player character, use "player". For {{char}}, use their name as written in the scene. Do not substitute real-world names, nicknames, or aliases.
 
 If nothing changed, return [].
 Return ONLY the JSON array. No markdown fences, no explanation, no preamble.`;
@@ -285,7 +287,13 @@ function initSettings() {
         if (k !== 'state' && settings[k] === undefined) settings[k] = deepClone(v);
     }
     // State lives in chat_metadata, not extension_settings — init blank placeholder
-    if (!settings.state) settings.state = { player: makeCharacter(getContext().name1 || 'Player', true), npcs: {} };
+    if (!settings.state) settings.state = {
+        player:     makeCharacter(getContext().name1 || 'Player', true, {}, false),
+        charPlayer: makeCharacter(getContext().name2 || 'Character', false, {}, true),
+        npcs:       {},
+        quests:     { main: [], side: [] },
+        scene:      { location: '', time: '', mood: '', events: [], focus: '' },
+    };
 }
 
 // Load per-chat state from chat_metadata (called on init + CHAT_CHANGED)
@@ -550,7 +558,7 @@ function renderCharOverview(char) {
             <span class="el-pill el-pill-class">
                 <span class="el-editable" data-cid="${cid}" data-f="class" contenteditable="true">${escapeHtml(char.class) || '—'}</span>
             </span>
-            <span class="el-pill el-pill-adv">ADV
+            <span class="el-pill el-pill-adv">Rank
                 <select class="el-pill-select" data-cid="${cid}" data-f="adventurerRank">${advOpts}</select>
             </span>
             <span class="el-pill el-pill-abo">
@@ -639,7 +647,7 @@ function renderCharLoadout(char) {
             return `<div class="el-disc-card">
                 <div class="el-disc-icon">${DISC_ICONS[d]||'◆'}</div>
                 <div class="el-disc-info">
-                    <div class="el-disc-label">${d}</div>
+                    <div class="el-disc-label">${d} <span style="font-size:0.72em;font-weight:400;color:var(--el-text-dim)">${data.xp % toNext}/${toNext}</span></div>
                     <div class="el-bar-track slim el-clickbar" style="cursor:pointer" data-bar-cid="${cid}" data-bar-f="disc.${d}" data-bar-max="${toNext}"><div class="el-bar-fill el-xp" style="width:${pct}%"></div></div>
                 </div>
                 <div class="el-pm-btns">
@@ -1046,7 +1054,7 @@ function renderNPCCard(npc) {
         </div>
 
         <div class="el-ident-row">
-            <span class="el-ident-label">ADV:</span>
+            <span class="el-ident-label">Rank:</span>
             <select class="el-rank-select" data-cid="${cid}" data-f="adventurerRank">${advOpts}</select>
             <select class="el-rank-select el-abo-select" data-cid="${cid}" data-f="aboGender">${aboOpts}</select>
             ${npc.aboStatus !== 'neutral'
@@ -1119,6 +1127,7 @@ function renderNPCTab() {
             const cid = `npc-body-${name.replace(/\s+/g, '_')}`;
             return `<div class="el-npc-card el-collapse" data-target="${cid}">
                 <div class="el-npc-header el-toggle">
+                    <span class="el-npc-scene-dot${npc.inScene ? ' active' : ''}" data-npc-scene="${name}" title="${npc.inScene ? 'In scene (click to remove)' : 'Not in scene (click to add)'}">●</span>
                     <span class="el-npc-name">${name}</span>
                     <span class="el-npc-meta">${npc.class || '—'}</span>
                     <button class="el-btn tiny el-remove-npc" data-npc="${name}" title="Remove NPC">✕</button>
@@ -1397,6 +1406,19 @@ function bindNPCEvents(root) {
             const name = btn.dataset.npc;
             if (name && confirm(`Remove ${name} from tracker?`)) {
                 delete settings.state.npcs[name];
+                saveState();
+                renderHUD();
+            }
+        });
+    });
+
+    root.querySelectorAll('.el-npc-scene-dot[data-npc-scene]').forEach(dot => {
+        dot.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const name = dot.dataset.npcScene;
+            const npc = settings.state.npcs[name];
+            if (npc) {
+                npc.inScene = !npc.inScene;
                 saveState();
                 renderHUD();
             }
@@ -1690,11 +1712,49 @@ async function _callOpenAI({ endpoint, apiKey, model, systemPrompt, userPrompt, 
 
 // ─── EXTRACTION CALL ──────────────────────────────────────────────────────────
 
+function buildStateSnapshot() {
+    const s = settings.state;
+    if (!s) return '';
+    const lines = ['== CURRENT STATE (use as baseline for deltas) =='];
+
+    function snapChar(label, char) {
+        if (!char) return;
+        const parts = [`${label}: ${char.name || '?'}`];
+        parts.push(`HP:${char.hp?.current ?? '?'}/${char.hp?.max ?? '?'}`);
+        parts.push(`MP:${char.mana?.current ?? '?'}/${char.mana?.max ?? '?'}`);
+        if (char.stats) {
+            const st = char.stats;
+            parts.push(`STR:${st.STR} AGI:${st.AGI} VIT:${st.VIT} INT:${st.INT} WIS:${st.WIS} LCK:${st.LCK}`);
+        }
+        if (char.adventurerRank) parts.push(`Rank:${char.adventurerRank}`);
+        if (char.aboGender) parts.push(char.aboGender);
+        if (char.aboStatus && char.aboStatus !== 'neutral') parts.push(char.aboStatus.toUpperCase());
+        if (char.threadSightLevel > 0) parts.push(`ThreadSight:${char.threadSightLevel}`);
+        if (char.greatSageLevel > 0)   parts.push(`GreatSage:${char.greatSageLevel}`);
+        if (char.skills?.length > 0) {
+            parts.push('Skills: ' + char.skills.map(sk => `${sk.name} ${sk.rank}·${sk.level}`).join(', '));
+        }
+        if (char.mesos > 0) parts.push(`Mesos:${char.mesos}`);
+        if (char.statusEffects?.length > 0) {
+            parts.push('Status: ' + char.statusEffects.map(f => f.name).join(', '));
+        }
+        lines.push(parts.join(' | '));
+    }
+
+    snapChar('PLAYER', s.player);
+    snapChar('CHAR', s.charPlayer);
+    for (const [name, npc] of Object.entries(s.npcs || {})) {
+        snapChar(`NPC:${name}`, npc);
+    }
+    return lines.join('\n') + '\n\n';
+}
+
 async function callExtractionAPI(messageBlock) {
     _abortCtrl = new AbortController();
+    const snapshot = buildStateSnapshot();
     return directGenerate({
         systemPrompt: EXTRACTION_SYSTEM,
-        userPrompt:   `Extract stat changes from these roleplay messages:\n\n${messageBlock}`,
+        userPrompt:   `${snapshot}Extract stat changes from these roleplay messages:\n\n${messageBlock}`,
         maxTokens:    1200,
         temperature:  0,
         signal:       _abortCtrl.signal,
@@ -1728,16 +1788,32 @@ function applyUpdates(char, updates) {
     if (!char || !updates) return;
 
     // Scalar top-level fields
-    for (const f of ['name', 'class', 'classRank', 'aboGender', 'aboStatus', 'adventurerRank', 'threadSightLevel', 'mesos', 'notes']) {
+    for (const f of ['name', 'class', 'aboGender', 'aboStatus', 'adventurerRank', 'mesos', 'notes']) {
         if (updates[f] !== undefined) char[f] = updates[f];
     }
 
-    // HP / Mana (partial merge)
-    if (updates.hp)   char.hp   = { ...char.hp,   ...updates.hp   };
-    if (updates.mana) char.mana = { ...char.mana, ...updates.mana };
+    // Clamped ability levels
+    if (updates.threadSightLevel !== undefined) char.threadSightLevel = Math.max(0, Math.min(10, updates.threadSightLevel));
+    if (updates.greatSageLevel   !== undefined) char.greatSageLevel   = Math.max(0, Math.min(10, updates.greatSageLevel));
 
-    // Stats (partial merge — only override provided keys)
-    if (updates.stats) char.stats = { ...char.stats, ...updates.stats };
+    // HP / Mana (partial merge + clamp)
+    if (updates.hp) {
+        char.hp = { ...char.hp, ...updates.hp };
+        char.hp.max     = Math.max(1, char.hp.max);
+        char.hp.current = Math.max(0, Math.min(char.hp.current, char.hp.max));
+    }
+    if (updates.mana) {
+        char.mana = { ...char.mana, ...updates.mana };
+        char.mana.max     = Math.max(1, char.mana.max);
+        char.mana.current = Math.max(0, Math.min(char.mana.current, char.mana.max));
+    }
+
+    // Stats (partial merge + clamp 0–20)
+    if (updates.stats) {
+        for (const [key, val] of Object.entries(updates.stats)) {
+            if (STATS.includes(key)) char.stats[key] = Math.max(0, Math.min(STAT_CAP, val));
+        }
+    }
 
     // Disciplines
     if (updates.disciplines) {
@@ -1815,9 +1891,12 @@ async function parseLastMessages() {
         const ctx     = getContext();
         const chat    = ctx.chat || [];
         const count   = Math.min(settings.contextMessages || 3, chat.length);
-        const msgs    = chat.slice(-count).map(m =>
-            `[${m.is_user ? 'USER' : 'AI'}]: ${(m.mes || '').trim()}`
-        );
+        const msgs    = chat.slice(-count).map(m => {
+            // Strip tracker injection blocks that may have leaked into chat history
+            let text = (m.mes || '').trim();
+            text = text.replace(/\[ELLINIA TRACKER\][\s\S]*?(?=\n\n(?:\[|$)|$)/g, '').trim();
+            return `[${m.is_user ? 'USER' : 'AI'}]: ${text}`;
+        }).filter(m => m.length > 10);
 
         if (msgs.length === 0) { showNotif('No messages to parse'); return; }
 
@@ -2114,7 +2193,7 @@ function formatChar(char, sections) {
     if (!char.isPlayer && !char.isCharPlayer) {
         const idParts = [char.name || '?'];
         if (char.class) idParts.push(char.class);
-        if (char.adventurerRank) idParts.push(`ADV:${char.adventurerRank}`);
+        if (char.adventurerRank) idParts.push(`Rank:${char.adventurerRank}`);
         if (char.aboGender) idParts.push(char.aboGender);
         if (char.aboStatus && char.aboStatus !== 'neutral') idParts.push(char.aboStatus.toUpperCase());
         lines.push(idParts.join(' | '));
@@ -2132,7 +2211,7 @@ function formatChar(char, sections) {
     if (char.class) idParts.push(char.class);
     if (char.aboGender) idParts.push(char.aboGender);
     if (char.aboStatus && char.aboStatus !== 'neutral') idParts.push(char.aboStatus.toUpperCase());
-    if (char.adventurerRank) idParts.push(`ADV:${char.adventurerRank}`);
+    if (char.adventurerRank) idParts.push(`Rank:${char.adventurerRank}`);
     idParts.push(`HP:${char.hp?.current??'?'}/${char.hp?.max??'?'}`);
     idParts.push(`MP:${char.mana?.current??'?'}/${char.mana?.max??'?'}`);
     lines.push(idParts.join(' | '));
@@ -2186,6 +2265,8 @@ function formatChar(char, sections) {
         lines.push(`Status: ${fx}`);
     }
 
+    if (char.notes?.trim()) lines.push(`Notes: ${char.notes.trim().slice(0, 150)}`);
+
     return lines.join('\n');
 }
 
@@ -2206,6 +2287,7 @@ function formatStateForContext() {
 
     if (sec.npcs !== false && settings.state.npcs) {
         for (const npc of Object.values(settings.state.npcs)) {
+            if (!npc.inScene) continue;
             const block = formatChar(npc, sec);
             if (block) blocks.push(block);
         }
@@ -2224,8 +2306,14 @@ function formatStateForContext() {
     if (quests) {
         const activeMain = (quests.main || []).filter(q => q.status === 'active');
         const activeSide = (quests.side || []).filter(q => q.status === 'active');
-        if (activeMain.length) questLines.push('Main: ' + activeMain.map(q => q.title).join(', '));
-        if (activeSide.length) questLines.push('Side: ' + activeSide.map(q => q.title).join(', '));
+        for (const q of activeMain) {
+            const note = q.notes?.trim() ? ` — ${q.notes.trim().slice(0, 100)}` : '';
+            questLines.push(`Main: ${q.title}${note}`);
+        }
+        for (const q of activeSide) {
+            const note = q.notes?.trim() ? ` — ${q.notes.trim().slice(0, 100)}` : '';
+            questLines.push(`Side: ${q.title}${note}`);
+        }
     }
     const questBlock = questLines.length ? `\n\n[QUESTS]\n${questLines.join('\n')}` : '';
 
