@@ -440,6 +440,9 @@ function renderCharPanel(char) {
     const advOpts = RANK_ORDER.filter(r => r !== 'Mythic').map(r =>
         `<option value="${r}" ${char.adventurerRank === r ? 'selected' : ''}>${r}</option>`).join('');
 
+    const aboOpts = ['Alpha','Beta','Omega'].map(g =>
+        `<option value="${g}" ${char.aboGender === g ? 'selected' : ''}>${g}</option>`).join('');
+
     // ── Identity ──────────────────────────────────────────────────────
     let html = `<div class="el-identity">
         <div class="el-editable el-ident-name" data-cid="${cid}" data-f="name" contenteditable="true">${escapeHtml(char.name) || '—'}</div>
@@ -451,7 +454,8 @@ function renderCharPanel(char) {
         <div class="el-ident-row">
             <span class="el-ident-label">ADV:</span>
             <select class="el-rank-select" data-cid="${cid}" data-f="adventurerRank">${advOpts}</select>
-            <span class="el-abo el-abo-cycle" data-cid="${cid}" title="Click to cycle ABO status">${aboIcon} ${char.aboGender} ${statusTag}</span>
+            <select class="el-rank-select el-abo-select" data-cid="${cid}" data-f="aboGender">${aboOpts}</select>
+            ${char.aboStatus !== 'neutral' ? `<span class="el-abo-active el-abo-cycle" data-cid="${cid}" style="color:${aboColor};cursor:pointer" title="Click to cycle status">[${char.aboStatus.toUpperCase()}]</span>` : `<span class="el-abo-cycle el-abo-neutral" data-cid="${cid}" style="color:var(--el-text-dim);cursor:pointer" title="Click to set status">○</span>`}
             <span class="el-total-lv">∑ Lv.${totalLevel(char)}</span>
         </div>
     </div>`;
@@ -763,13 +767,14 @@ function initEditDelegation(hud) {
     // ── Change: selects + number inputs ──────────────────────────────
     hud.addEventListener('change', e => {
 
-        const sel = e.target.closest('.el-rank-select[data-cid], .el-mini-sel[data-cid]');
+        const sel = e.target.closest('.el-rank-select[data-cid], .el-mini-sel[data-cid], .el-abo-select[data-cid]');
         if (sel) {
             e.stopPropagation();
             const char = getCharByKey(sel.dataset.cid);
             const f=sel.dataset.f, v=sel.value;
             if (!char) return;
             if      (f==='adventurerRank')          char.adventurerRank=v;
+            else if (f==='aboGender')               { char.aboGender=v; char.aboStatus='neutral'; }
             else if (f.startsWith('skill.rank.'))   { const i=parseInt(f.split('.')[2]); if(char.skills?.[i]) char.skills[i].rank=v; }
             else if (f.startsWith('equip.tier.'))   { const slot=f.split('.')[2]; if(char.equipment?.[slot]) char.equipment[slot].tier=v; }
             else if (f.startsWith('inv.tier.'))     { const i=parseInt(f.split('.')[2]); if(char.inventory?.[i]) char.inventory[i].tier=v; }
@@ -820,6 +825,63 @@ function initEditDelegation(hud) {
 function bindEditEvents() {}
 
 
+// ─── NPC CARD (SLIM) ──────────────────────────────────────────────────────────
+// NPCs only need scene-relevant identity. Full stat editing lives on the PLAYER
+// tab for Ken and Hoshi. Status effects kept (collapsible) because they affect
+// scene behaviour and are included in the AI prompt injection.
+
+function renderNPCCard(npc) {
+    const cid      = npc.name;
+    const aboColor = STATUS_COLORS[npc.aboStatus] || 'var(--el-text-dim)';
+    const aboOpts  = ['Alpha','Beta','Omega'].map(g =>
+        `<option value="${g}" ${npc.aboGender === g ? 'selected' : ''}>${g}</option>`).join('');
+    const advOpts  = RANK_ORDER.filter(r => r !== 'Mythic').map(r =>
+        `<option value="${r}" ${npc.adventurerRank === r ? 'selected' : ''}>${r}</option>`).join('');
+
+    let html = `<div class="el-npc-slim">
+
+        <div class="el-ident-row">
+            <span class="el-ident-label">Class:</span>
+            <span class="el-editable" data-cid="${cid}" data-f="class" contenteditable="true">${escapeHtml(npc.class) || '—'}</span>
+            ${rankBadge(npc.classRank)}
+        </div>
+
+        <div class="el-ident-row">
+            <span class="el-ident-label">ADV:</span>
+            <select class="el-rank-select" data-cid="${cid}" data-f="adventurerRank">${advOpts}</select>
+            <select class="el-rank-select el-abo-select" data-cid="${cid}" data-f="aboGender">${aboOpts}</select>
+            ${npc.aboStatus !== 'neutral'
+                ? `<span class="el-abo-active el-abo-cycle" data-cid="${cid}" style="color:${aboColor};cursor:pointer" title="Click to cycle">[${npc.aboStatus.toUpperCase()}]</span>`
+                : `<span class="el-abo-cycle el-abo-neutral" data-cid="${cid}" style="color:var(--el-text-dim);cursor:pointer" title="Click to set status">○</span>`}
+        </div>`;
+
+    // Status effects — collapsible, included because they feed into prompt injection
+    const fxId = `fx-${cid.replace(/\W/g,'_')}`;
+    html += `<div class="el-section el-collapse" data-target="${fxId}" style="margin-top:6px">
+        <div class="el-sec-title el-toggle" style="font-size:10px">STATUS (${npc.statusEffects?.length||0}) <span class="el-arrow">▼</span></div>
+        <div class="el-collapse-body collapsed" id="${fxId}">
+            ${(npc.statusEffects||[]).map((fx,i) => `
+            <div class="el-status-row">
+                <span class="el-editable el-status-name" data-cid="${cid}" data-f="fx.name.${i}" contenteditable="true">${escapeHtml(fx.name)}</span>
+                <div class="el-pm-btns">
+                    <button class="el-pm-btn small" data-cid="${cid}" data-f="fx.dur.${i}" data-d="-1">−</button>
+                    <span class="el-disc-lvl">${fx.duration??'∞'}t</span>
+                    <button class="el-pm-btn small" data-cid="${cid}" data-f="fx.dur.${i}" data-d="1">+</button>
+                </div>
+                <button class="el-rm-btn" data-cid="${cid}" data-f="fx.remove.${i}">✕</button>
+            </div>`).join('')}
+            ${(npc.statusEffects||[]).length===0 ? '<div class="el-empty" style="font-size:10px">None</div>' : ''}
+            <button class="el-btn small el-add-btn" data-cid="${cid}" data-f="fx.add">+ Add</button>
+        </div>
+    </div>`;
+
+    html += `<div class="el-editable el-notes-edit" data-cid="${cid}" data-f="notes"
+        contenteditable="true" style="margin-top:6px;font-size:11px">${npc.notes||'<span style="opacity:0.4;font-style:italic">Notes…</span>'}</div>`;
+
+    html += `</div>`;
+    return html;
+}
+
 function renderNPCTab() {
     const npcs   = settings.state.npcs;
     const names  = Object.keys(npcs);
@@ -855,7 +917,7 @@ function renderNPCTab() {
                     <span class="el-arrow">▼</span>
                 </div>
                 <div class="el-collapse-body collapsed el-npc-body" id="${cid}">
-                    ${renderCharPanel(npc)}
+                    ${renderNPCCard(npc)}
                 </div>
             </div>`;
         }).join('');
