@@ -1555,8 +1555,7 @@ function createOrb() {
     orb.innerHTML = '<span style="pointer-events:none;font-size:24px;color:#e8c840;text-shadow:0 0 8px rgba(232,200,64,0.6)">◈</span>';
     orb.title = 'Ellinia Tracker';
 
-    // Every visual property must be inline — orb lives on <html> (not <body>)
-    // so CSS variables and stylesheets don't reach it reliably on mobile
+    // All visual properties are inline so they work regardless of stylesheet load order
     Object.assign(orb.style, {
         display:        'flex',
         position:       'fixed',
@@ -1572,21 +1571,28 @@ function createOrb() {
         fontSize:       '28px',
         color:          '#ffffff',
         cursor:         'grab',
-        userSelect:     'none',
+        userSelect:           'none',
+        webkitUserSelect:     'none',  // Fix: suppress iOS text selection during drag
         touchAction:    'none',
         webkitTapHighlightColor: 'transparent',
         right:          'auto',
         top:            'auto',
     });
 
-    // Nuke stale position — desktop values are offscreen on mobile
-    localStorage.removeItem('el_orb_left');
-    localStorage.removeItem('el_orb_bottom');
-    orb.style.left   = '16px';
-    orb.style.bottom = '160px';
+    // Restore saved position if it's still on-screen; otherwise use safe default.
+    // (Avoids nuking a valid saved position while still handling cross-device size changes.)
+    const orbW = 64, orbH = 64;
+    const savedLeft   = parseFloat(localStorage.getItem('el_orb_left'));
+    const savedBottom = parseFloat(localStorage.getItem('el_orb_bottom'));
+    const safeLeft   = !isNaN(savedLeft)   && savedLeft   >= 0 && savedLeft   <= window.innerWidth  - orbW;
+    const safeBottom = !isNaN(savedBottom) && savedBottom >= 0 && savedBottom <= window.innerHeight - orbH;
+    orb.style.left   = (safeLeft   ? savedLeft   : 16)  + 'px';
+    orb.style.bottom = (safeBottom ? savedBottom : 160) + 'px';
 
-    // Append to <html> — escapes stacking context traps on <body>
-    document.documentElement.appendChild(orb);
+    // Fix: append to <body>, not <html>.
+    // SillyTavern sets overflow:hidden on <html>, which clips position:fixed children
+    // on mobile even at max z-index. <body> lets position:fixed work against the viewport.
+    document.body.appendChild(orb);
 
     // ── Drag logic ────────────────────────────────────────────────────
     let startX, startY, startLeft, startBottom, dragged = false;
