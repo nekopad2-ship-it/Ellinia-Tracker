@@ -101,6 +101,7 @@ const DEFAULT_SETTINGS = {
         charPlayer: null,
         npcs:       {},
         quests:     { main: [], side: [] },
+        scene:      { location: '', time: '', mood: '', events: [], focus: '' },
     }
 };
 
@@ -233,7 +234,8 @@ Return ONLY the JSON array. No markdown fences, no explanation, no preamble.`;
 let settings          = {};
 let isParsing         = false;
 let _abortCtrl        = null;
-let _activePlayerView = 'user'; // 'user' | 'char'
+let _activePlayerView = 'user';   // 'user' | 'char'
+let _playerPage       = 'overview'; // 'overview' | 'loadout'
 
 // ─── UTILITIES ────────────────────────────────────────────────────────────────
 
@@ -292,6 +294,7 @@ function loadChatState() {
         if (!settings.state.charPlayer) settings.state.charPlayer = makeCharacter(charName, false, {}, true);
         if (!settings.state.npcs)       settings.state.npcs       = {};
         if (!settings.state.quests)     settings.state.quests     = { main: [], side: [] };
+        if (!settings.state.scene)      settings.state.scene      = { location: '', time: '', mood: '', events: [], focus: '' };
         settings.state.player.isPlayer         = true;
         settings.state.charPlayer.isCharPlayer = true;
         // Remove any NPC entry that duplicates the charPlayer (e.g. Hoshi added via preset)
@@ -307,6 +310,7 @@ function loadChatState() {
             charPlayer: makeCharacter(charName, false, {}, true),
             npcs:       {},
             quests:     { main: [], side: [] },
+            scene:      { location: '', time: '', mood: '', events: [], focus: '' },
         };
     }
 }
@@ -374,12 +378,9 @@ function totalLevel(char) {
     return DISCIPLINES.reduce((s, d) => s + (char.disciplines?.[d]?.level || 0), 0);
 }
 
-// ─── PLAYER TAB RENDERER ──────────────────────────────────────────────────────
+// ─── PLAYER TAB ───────────────────────────────────────────────────────────────
 
 function renderPlayerTab() {
-    // Show empty state only if settings.state has never been initialised at all.
-    // chat_metadata.ellinia_state is null for brand-new chats even though
-    // loadChatState() has already built a valid settings.state in memory.
     if (!settings.state?.player) {
         return `<div class="el-empty-state">
             <div class="el-empty-glyph">◈</div>
@@ -395,67 +396,103 @@ function renderPlayerTab() {
     const charAvatar = getCurrentCharAvatar();
     const isUser     = _activePlayerView === 'user';
     const activeChar = isUser ? settings.state.player : settings.state.charPlayer;
+    const sc         = settings.state.scene || {};
 
-    return `<div class="el-player-switcher">
-        <div class="el-psw-wrap ${isUser ? 'active' : ''}" data-view="user" title="Switch to ${userName}">
-            ${userAvatar
-                ? `<img class="el-avatar el-psw-avatar" src="${userAvatar}" alt="user" onerror="this.style.display='none'"/>`
-                : `<div class="el-avatar el-avatar-placeholder">U</div>`}
-            <span class="el-avatar-label">${userName}</span>
+    // ── Portrait cards ────────────────────────────────────────────────
+    function portraitCard(char, avatar, label, isActive) {
+        const aboColor = STATUS_COLORS[char.aboStatus] || null;
+        const statusPill = char.aboStatus !== 'neutral'
+            ? `<span class="el-portrait-status" style="background:${aboColor}22;border-color:${aboColor}88;color:${aboColor}">${char.aboStatus.toUpperCase()}</span>`
+            : `<span class="el-portrait-status el-portrait-status-abo">${ABO_ICONS[char.aboGender] || '◇'} ${char.aboGender}</span>`;
+        const initial  = (char.name || label).charAt(0).toUpperCase();
+        const viewKey  = char.isPlayer ? 'user' : 'char';
+        return `<div class="el-portrait-card${isActive ? ' active' : ''}" data-view="${viewKey}">
+            <div class="el-portrait-img-wrap">
+                ${avatar
+                    ? `<img class="el-portrait-img" src="${avatar}" alt="${escapeHtml(char.name)}" onerror="this.style.display='none'"/>`
+                    : `<div class="el-portrait-placeholder">${initial}</div>`}
+                <div class="el-portrait-overlay"></div>
+            </div>
+            ${statusPill}
+            <div class="el-portrait-footer">
+                <div class="el-portrait-name">${escapeHtml(char.name || label)}</div>
+                <div class="el-portrait-sub">∑ Lv.${totalLevel(char)}</div>
+            </div>
+        </div>`;
+    }
+
+    let html = `<div class="el-portrait-row">
+        ${portraitCard(settings.state.player,     userAvatar, userName, isUser)}
+        ${portraitCard(settings.state.charPlayer, charAvatar, charName, !isUser)}
+    </div>`;
+
+    // ── Page toggle ───────────────────────────────────────────────────
+    html += `<div class="el-page-toggle">
+        <button class="el-page-btn${_playerPage==='overview'?' active':''}" data-page="overview">Overview</button>
+        <button class="el-page-btn${_playerPage==='loadout'?' active':''}" data-page="loadout">Loadout</button>
+    </div>`;
+
+    // ── Active page content ───────────────────────────────────────────
+    html += _playerPage === 'overview'
+        ? renderCharOverview(activeChar)
+        : renderCharLoadout(activeChar);
+
+    // ── Scene tracker — always shows ──────────────────────────────────
+    html += `<div class="el-scene-section">
+        <div class="el-sec-title" style="margin-bottom:0.5em">◉ SCENE</div>
+        <div class="el-scene-grid">
+            <div class="el-scene-row">
+                <span class="el-scene-label">Location</span>
+                <div class="el-editable el-scene-field" data-sf="location" contenteditable="true">${sc.location || '<span style="opacity:0.35;font-style:italic">Where are you?</span>'}</div>
+            </div>
+            <div class="el-scene-row">
+                <span class="el-scene-label">Time</span>
+                <div class="el-editable el-scene-field" data-sf="time" contenteditable="true">${sc.time || '<span style="opacity:0.35;font-style:italic">Time of day, weather…</span>'}</div>
+            </div>
+            <div class="el-scene-row">
+                <span class="el-scene-label">Mood</span>
+                <div class="el-editable el-scene-field" data-sf="mood" contenteditable="true">${sc.mood || '<span style="opacity:0.35;font-style:italic">Atmosphere, tension…</span>'}</div>
+            </div>
         </div>
-        <div class="el-psw-wrap ${!isUser ? 'active' : ''}" data-view="char" title="Switch to ${charName}">
-            ${charAvatar
-                ? `<img class="el-avatar el-psw-avatar" src="${charAvatar}" alt="char" onerror="this.style.display='none'"/>`
-                : `<div class="el-avatar el-avatar-placeholder">C</div>`}
-            <span class="el-avatar-label">${charName}</span>
+        <div class="el-scene-events-wrap">
+            <div class="el-scene-events-header">
+                <span class="el-scene-label" style="font-size:0.7rem;letter-spacing:0.08em">RECENT EVENTS</span>
+                <button class="el-btn tiny el-scene-event-add">+ Add</button>
+            </div>
+            <div class="el-scene-events-list">
+                ${(sc.events || []).length === 0
+                    ? '<div class="el-empty" style="font-size:0.75rem;padding:0.25em 0">None yet</div>'
+                    : (sc.events || []).map((ev, i) => `
+                        <div class="el-scene-event-row">
+                            <span class="el-scene-event-bullet">◆</span>
+                            <div class="el-editable el-scene-event-text" data-sei="${i}" contenteditable="true">${escapeHtml(ev)}</div>
+                            <button class="el-rm-btn el-scene-event-rm" data-sei="${i}">✕</button>
+                        </div>`).join('')}
+            </div>
         </div>
     </div>
-    ${renderCharPanel(activeChar)}`;
+
+    <div class="el-scene-section" style="margin-top:0.4em">
+        <div class="el-sec-title" style="margin-bottom:0.4em">◎ CURRENT FOCUS</div>
+        <div class="el-editable el-scene-field el-focus-field" data-sf="focus" contenteditable="true"
+            style="min-height:2em;font-style:italic">${sc.focus || '<span style="opacity:0.35;font-style:italic">What is the character working towards right now?</span>'}</div>
+    </div>`;
+
+    return html;
 }
 
-// ─── CHARACTER PANEL RENDERER ─────────────────────────────────────────────────
+// ─── CHARACTER PANEL — OVERVIEW (page 1) ──────────────────────────────────────
+// Identity, HP/MP, Thread Sight / Great Sage, Stats
 
-
-function getCharAvatar(char) {
-    try {
-        if (char.isPlayer) {
-            const av = user_avatar;
-            if (av) return `/User Avatars/${av}`;
-            return null;
-        } else {
-            const name  = char.name?.toLowerCase().trim();
-            const match = (getContext().characters || characters)?.find(c => c.name?.toLowerCase().trim() === name);
-            if (match?.avatar) return getThumbnailUrl('avatar', match.avatar);
-            return null;
-        }
-    } catch { return null; }
-}
-
-function getCurrentCharAvatar() {
-    try {
-        const ctx  = getContext();
-        const chid = ctx.characterId ?? this_chid;
-        const char = (ctx.characters || characters)?.[chid];
-        if (char?.avatar) return getThumbnailUrl('avatar', char.avatar);
-        return null;
-    } catch { return null; }
-}
-
-function renderCharPanel(char) {
+function renderCharOverview(char) {
     const capped   = 20;
     const cid      = char.isPlayer ? '__player__' : char.isCharPlayer ? '__char__' : char.name;
-    const aboIcon  = ABO_ICONS[char.aboGender] || '◇';
     const aboColor = STATUS_COLORS[char.aboStatus] || 'var(--el-text-dim)';
-    const statusTag = char.aboStatus !== 'neutral'
-        ? `<span class="el-abo-active" style="color:${aboColor}">[${char.aboStatus.toUpperCase()}]</span>` : '';
-
-    const advOpts = RANK_ORDER.filter(r => r !== 'Mythic').map(r =>
+    const advOpts  = RANK_ORDER.filter(r => r !== 'Mythic').map(r =>
         `<option value="${r}" ${char.adventurerRank === r ? 'selected' : ''}>${r}</option>`).join('');
-
-    const aboOpts = ['Alpha','Beta','Omega'].map(g =>
+    const aboOpts  = ['Alpha','Beta','Omega'].map(g =>
         `<option value="${g}" ${char.aboGender === g ? 'selected' : ''}>${g}</option>`).join('');
 
-    // ── Identity ──────────────────────────────────────────────────────
     let html = `<div class="el-identity">
         <div class="el-editable el-ident-name" data-cid="${cid}" data-f="name" contenteditable="true">${escapeHtml(char.name) || '—'}</div>
         <div class="el-ident-row">
@@ -466,7 +503,9 @@ function renderCharPanel(char) {
             <span class="el-ident-label">ADV:</span>
             <select class="el-rank-select" data-cid="${cid}" data-f="adventurerRank">${advOpts}</select>
             <select class="el-rank-select el-abo-select" data-cid="${cid}" data-f="aboGender">${aboOpts}</select>
-            ${char.aboStatus !== 'neutral' ? `<span class="el-abo-active el-abo-cycle" data-cid="${cid}" style="color:${aboColor};cursor:pointer" title="Click to cycle status">[${char.aboStatus.toUpperCase()}]</span>` : `<span class="el-abo-cycle el-abo-neutral" data-cid="${cid}" style="color:var(--el-text-dim);cursor:pointer" title="Click to set status">○</span>`}
+            ${char.aboStatus !== 'neutral'
+                ? `<span class="el-abo-active el-abo-cycle" data-cid="${cid}" style="color:${aboColor};cursor:pointer" title="Click to cycle">[${char.aboStatus.toUpperCase()}]</span>`
+                : `<span class="el-abo-cycle el-abo-neutral" data-cid="${cid}" style="color:var(--el-text-dim);cursor:pointer" title="Click to set">○</span>`}
             <span class="el-total-lv">∑ Lv.${totalLevel(char)}</span>
         </div>
         <div class="el-ident-row" style="align-items:flex-start;margin-top:4px">
@@ -476,7 +515,7 @@ function renderCharPanel(char) {
         </div>
     </div>`;
 
-    // ── HP / MP ───────────────────────────────────────────────────────
+    // HP / MP
     const hpPct = char.hp.max > 0 ? Math.min(100, Math.round((char.hp.current / char.hp.max) * 100)) : 0;
     const mpPct = char.mana.max > 0 ? Math.min(100, Math.round((char.mana.current / char.mana.max) * 100)) : 0;
     html += `<div class="el-section">
@@ -492,7 +531,7 @@ function renderCharPanel(char) {
         </div>
     </div>`;
 
-    // ── Thread Sight ({{user}} only) ─────────────────────────────────
+    // Thread Sight
     if (char.isPlayer) {
         const tsl = char.threadSightLevel || 0;
         const tsd = ['—','Common legible','Uncommon legible','Rare legible + mana read','Weak point detection','Epic legible + full HUD'][tsl] || '?';
@@ -510,7 +549,7 @@ function renderCharPanel(char) {
         </div>`;
     }
 
-    // ── Great Sage ({{char}} only) ────────────────────────────────────
+    // Great Sage
     if (char.isCharPlayer) {
         const gsl = char.greatSageLevel || 0;
         const gsd = ['—','Basic analysis','Combat threat alerts','Structural weakness detection','Tactical recommendations','Full battlefield omniscience'][gsl] || '?';
@@ -528,7 +567,7 @@ function renderCharPanel(char) {
         </div>`;
     }
 
-    // ── Stats ─────────────────────────────────────────────────────────
+    // Stats
     html += `<div class="el-section">
         <div class="el-sec-title">ATTRIBUTES</div>
         <div class="el-stats-grid">
@@ -549,7 +588,17 @@ function renderCharPanel(char) {
         </div>
     </div>`;
 
-    // ── Disciplines ────────────────────────────────────────────────────
+    return html;
+}
+
+// ─── CHARACTER PANEL — LOADOUT (page 2) ───────────────────────────────────────
+// Disciplines, Skills, Equipment, Inventory, Status Effects, Notes
+
+function renderCharLoadout(char) {
+    const cid = char.isPlayer ? '__player__' : char.isCharPlayer ? '__char__' : char.name;
+    let html = '';
+
+    // Disciplines
     const DISC_ICONS = { Combat:'⚔', Crafting:'⚒', Magic:'✦', Trade:'⚖', Gathering:'⛏' };
     html += `<div class="el-section">
         <div class="el-sec-title">DISCIPLINES</div>
@@ -572,7 +621,7 @@ function renderCharPanel(char) {
         }).join('')}
     </div>`;
 
-    // ── Skills ─────────────────────────────────────────────────────────
+    // Skills
     const sid = `skills-${cid.replace(/\W/g,'_')}`;
     html += `<div class="el-section el-collapse" data-target="${sid}">
         <div class="el-sec-title el-toggle">SKILLS (${char.skills?.length||0}) <span class="el-arrow">▼</span></div>
@@ -603,32 +652,32 @@ function renderCharPanel(char) {
         </div>
     </div>`;
 
-    // ── Equipment ──────────────────────────────────────────────────────
+    // Equipment
     const eid = `equip-${cid.replace(/\W/g,'_')}`;
     const TIERS = ['Common','Uncommon','Rare','Epic','Legendary','Unique'];
-    const TIER_COLORS = { Common:'#9d9d9d', Uncommon:'#1eff00', Rare:'#0070dd', Epic:'#a335ee', Legendary:'#ff8000', Unique:'#e6cc80' };
+    const TIER_COLORS_LOCAL = { Common:'#9d9d9d', Uncommon:'#1eff00', Rare:'#0070dd', Epic:'#a335ee', Legendary:'#ff8000', Unique:'#e6cc80' };
     html += `<div class="el-section el-collapse" data-target="${eid}">
         <div class="el-sec-title el-toggle">EQUIPMENT <span class="el-arrow">▼</span></div>
         <div class="el-collapse-body collapsed" id="${eid}">
             <div class="el-equip-grid">
                 ${EQUIP_SLOTS.map(slot => {
                     const item = char.equipment?.[slot];
-                    const tc   = item ? (TIER_COLORS[item.tier] || TIER_COLORS.Common) : 'var(--el-border)';
+                    const tc   = item ? (TIER_COLORS_LOCAL[item.tier] || TIER_COLORS_LOCAL.Common) : 'var(--el-border)';
                     const tierOpts = TIERS.map(t=>`<option value="${t}" ${item?.tier===t?'selected':''}>${t}</option>`).join('');
                     return `<div class="el-equip-slot${item?' filled':''}" style="--tc:${tc};border-left-color:${tc}">
                         <div class="el-equip-slot-top">
                             <span class="el-slot-label">${SLOT_LABELS[slot]}</span>
                             ${item ? `<select class="el-inv-tier-badge" data-cid="${cid}" data-f="equip.tier.${slot}" style="color:${tc};border-color:${tc}40">${tierOpts}</select>` : ''}
-                            ${item ? `<button class="el-rm-btn" data-cid="${cid}" data-f="equip.clear.${slot}" title="Clear slot">✕</button>` : ''}
+                            ${item ? `<button class="el-rm-btn" data-cid="${cid}" data-f="equip.clear.${slot}">✕</button>` : ''}
                         </div>
-                        <span class="el-editable el-slot-name" data-cid="${cid}" data-f="equip.name.${slot}" contenteditable="true" style="${item ? 'color:'+tc : ''}">${item?.name ? escapeHtml(item.name) : '<span style="opacity:0.3">empty</span>'}</span>
+                        <span class="el-editable el-slot-name" data-cid="${cid}" data-f="equip.name.${slot}" contenteditable="true" style="${item?'color:'+tc:''}">${item?.name ? escapeHtml(item.name) : '<span style="opacity:0.3">empty</span>'}</span>
                     </div>`;
                 }).join('')}
             </div>
         </div>
     </div>`;
 
-    // ── Inventory ──────────────────────────────────────────────────────
+    // Inventory
     const iid = `inv-${cid.replace(/\W/g,'_')}`;
     html += `<div class="el-section el-collapse" data-target="${iid}">
         <div class="el-sec-title el-toggle">INVENTORY <span class="el-arrow">▼</span>
@@ -643,14 +692,14 @@ function renderCharPanel(char) {
                         <span class="el-inv-qty">×${item.quantity||1}</span>
                         <button class="el-pm-btn small" data-cid="${cid}" data-f="inv.qty.${i}" data-d="1">+</button>
                     </div>
-                    <button class="el-rm-btn" data-cid="${cid}" data-f="inv.remove.${i}" title="Remove">✕</button>
+                    <button class="el-rm-btn" data-cid="${cid}" data-f="inv.remove.${i}">✕</button>
                 </div>`).join('')}
-            ${(char.inventory||[]).length === 0 ? '<div class="el-empty">Empty</div>' : ''}
+            ${(char.inventory||[]).length===0 ? '<div class="el-empty">Empty</div>' : ''}
             <button class="el-btn small el-add-btn" data-cid="${cid}" data-f="inv.add">+ Add Item</button>
         </div>
     </div>`;
 
-    // ── Status Effects ─────────────────────────────────────────────────
+    // Status Effects
     const xid = `status-${cid.replace(/\W/g,'_')}`;
     html += `<div class="el-section el-collapse" data-target="${xid}">
         <div class="el-sec-title el-toggle">STATUS EFFECTS (${(char.statusEffects||[]).length}) <span class="el-arrow">▼</span></div>
@@ -663,21 +712,49 @@ function renderCharPanel(char) {
                     <span class="el-disc-lvl">${fx.duration??'∞'}t</span>
                     <button class="el-pm-btn small" data-cid="${cid}" data-f="fx.dur.${i}" data-d="1">+</button>
                 </div>
-                <button class="el-rm-btn" data-cid="${cid}" data-f="fx.remove.${i}" title="Remove">✕</button>
+                <button class="el-rm-btn" data-cid="${cid}" data-f="fx.remove.${i}">✕</button>
                 <div class="el-editable el-status-desc" data-cid="${cid}" data-f="fx.desc.${i}" contenteditable="true">${escapeHtml(fx.effect||'')}</div>
             </div>`).join('')}
-            ${(char.statusEffects||[]).length === 0 ? '<div class="el-empty">None</div>' : ''}
+            ${(char.statusEffects||[]).length===0 ? '<div class="el-empty">None</div>' : ''}
             <button class="el-btn small el-add-btn" data-cid="${cid}" data-f="fx.add">+ Add Effect</button>
         </div>
     </div>`;
 
-    // ── Notes ──────────────────────────────────────────────────────────
+    // Notes
     html += `<div class="el-section">
         <div class="el-sec-title">NOTES</div>
         <div class="el-editable el-notes-edit" data-cid="${cid}" data-f="notes" contenteditable="true">${char.notes||'<span style="opacity:0.4;font-style:italic">Click to add notes…</span>'}</div>
     </div>`;
 
     return html;
+}
+
+// ─── AVATAR HELPERS ─────────────────────────────────────────────────
+
+
+function getCharAvatar(char) {
+    try {
+        if (char.isPlayer) {
+            const av = user_avatar;
+            if (av) return `/User Avatars/${av}`;
+            return null;
+        } else {
+            const name  = char.name?.toLowerCase().trim();
+            const match = (getContext().characters || characters)?.find(c => c.name?.toLowerCase().trim() === name);
+            if (match?.avatar) return getThumbnailUrl('avatar', match.avatar);
+            return null;
+        }
+    } catch { return null; }
+}
+
+function getCurrentCharAvatar() {
+    try {
+        const ctx  = getContext();
+        const chid = ctx.characterId ?? this_chid;
+        const char = (ctx.characters || characters)?.[chid];
+        if (char?.avatar) return getThumbnailUrl('avatar', char.avatar);
+        return null;
+    } catch { return null; }
 }
 
 // ─── EDIT EVENT DELEGATION ────────────────────────────────────────────────────
@@ -738,6 +815,32 @@ function initEditDelegation(hud) {
 
         const pswWrap = e.target.closest('.el-psw-wrap[data-view]');
         if (pswWrap) { _activePlayerView = pswWrap.dataset.view; renderHUD(); return; }
+
+        // ── Portrait card select ──────────────────────────────────────
+        const portraitCard = e.target.closest('.el-portrait-card[data-view]');
+        if (portraitCard) { _activePlayerView = portraitCard.dataset.view; renderHUD(); return; }
+
+        // ── Overview / Loadout page toggle ────────────────────────────
+        const pageBtn = e.target.closest('.el-page-btn[data-page]');
+        if (pageBtn) { _playerPage = pageBtn.dataset.page; renderHUD(); return; }
+
+        // ── Scene: add event ──────────────────────────────────────────
+        const sceneEventAdd = e.target.closest('.el-scene-event-add');
+        if (sceneEventAdd) {
+            e.stopPropagation();
+            if (!settings.state.scene) settings.state.scene = { location:'', time:'', mood:'', events:[], focus:'' };
+            settings.state.scene.events.push('New event');
+            saveState(); renderHUD(); return;
+        }
+
+        // ── Scene: remove event ───────────────────────────────────────
+        const sceneEventRm = e.target.closest('.el-scene-event-rm[data-sei]');
+        if (sceneEventRm) {
+            e.stopPropagation();
+            const i = parseInt(sceneEventRm.dataset.sei);
+            settings.state.scene?.events?.splice(i, 1);
+            saveState(); renderHUD(); return;
+        }
 
         // Skill rank badge cycle
         const skRank = e.target.closest('.el-sk-rank[data-cid]');
@@ -831,9 +934,8 @@ function initEditDelegation(hud) {
 
     // ── Focusin: clear placeholder text when field is focused ────────
     hud.addEventListener('focusin', e => {
-        const el = e.target.closest('.el-editable[contenteditable][data-cid]');
+        const el = e.target.closest('.el-editable[contenteditable]');
         if (!el) return;
-        // If the field only contains a placeholder <span>, clear it so user types into empty field
         if (el.querySelector('span') && el.innerText.trim() === el.querySelector('span')?.textContent?.trim()) {
             el.innerHTML = '';
         }
@@ -856,6 +958,28 @@ function initEditDelegation(hud) {
         else if (f.startsWith('fx.name.'))  { const i=parseInt(f.split('.')[2]); if(char.statusEffects?.[i]) char.statusEffects[i].name=val; }
         else if (f.startsWith('fx.desc.'))  { const i=parseInt(f.split('.')[2]); if(char.statusEffects?.[i]) char.statusEffects[i].effect=val; }
         saveState();
+    });
+
+    // ── Focusout: scene fields ────────────────────────────────────────
+    hud.addEventListener('focusout', e => {
+        const sf = e.target.closest('.el-scene-field[data-sf]');
+        if (sf) {
+            const key = sf.dataset.sf;
+            const val = sf.innerText.trim();
+            if (!settings.state.scene) settings.state.scene = {};
+            settings.state.scene[key] = val;
+            saveState(); return;
+        }
+        const set = e.target.closest('.el-scene-event-text[data-sei]');
+        if (set) {
+            const i   = parseInt(set.dataset.sei);
+            const val = set.innerText.trim();
+            if (settings.state.scene?.events?.[i] !== undefined) {
+                settings.state.scene.events[i] = val;
+                saveState();
+            }
+            return;
+        }
     });
 
     // ── Keydown: Enter blurs contenteditable ─────────────────────────
@@ -2075,7 +2199,20 @@ function formatStateForContext() {
     }
     const questBlock = questLines.length ? `\n\n[QUESTS]\n${questLines.join('\n')}` : '';
 
-    return `${prefix}[ELLINIA TRACKER]\n${blocks.join('\n\n')}${questBlock}`;
+    // Scene block
+    const sc = settings.state.scene;
+    const sceneLines = [];
+    if (sc) {
+        if (sc.location?.trim()) sceneLines.push(`Location: ${sc.location.trim()}`);
+        if (sc.time?.trim())     sceneLines.push(`Time: ${sc.time.trim()}`);
+        if (sc.mood?.trim())     sceneLines.push(`Mood: ${sc.mood.trim()}`);
+        if (sc.focus?.trim())    sceneLines.push(`Focus: ${sc.focus.trim()}`);
+        const evts = (sc.events || []).filter(e => e?.trim());
+        if (evts.length) sceneLines.push(`Recent: ${evts.join(', ')}`);
+    }
+    const sceneBlock = sceneLines.length ? `\n\n[SCENE]\n${sceneLines.join('\n')}` : '';
+
+    return `${prefix}[ELLINIA TRACKER]\n${blocks.join('\n\n')}${questBlock}${sceneBlock}`;
 }
 
 function injectState() {
