@@ -365,8 +365,10 @@ function totalLevel(char) {
 // ─── PLAYER TAB RENDERER ──────────────────────────────────────────────────────
 
 function renderPlayerTab() {
-    // No state yet — show empty placeholder
-    if (!chat_metadata?.ellinia_state) {
+    // Show empty state only if settings.state has never been initialised at all.
+    // chat_metadata.ellinia_state is null for brand-new chats even though
+    // loadChatState() has already built a valid settings.state in memory.
+    if (!settings.state?.player) {
         return `<div class="el-empty-state">
             <div class="el-empty-glyph">◈</div>
             <div class="el-empty-text">No data yet</div>
@@ -1687,6 +1689,10 @@ function createHUD() {
 
     document.body.appendChild(hud);
 
+    // On mobile (touch device / narrow screen) hide the collapse tab and minus button —
+    // the orb handles open/close. On desktop they stay functional.
+    const isMobile = ('ontouchstart' in window) || window.innerWidth < 600;
+
     // Cancel/parse toggle
     hud.querySelector('#el-parse-btn').addEventListener('click', () => {
         if (isParsing) {
@@ -1706,13 +1712,18 @@ function createHUD() {
     tab.textContent = '›';
     document.body.appendChild(tab);
 
-    const toggleCollapse = () => {
-        const collapsed = hud.classList.toggle('el-collapsed');
-        tab.textContent = collapsed ? '‹' : '›';
-    };
-
-    hud.querySelector('#el-minimize-btn').addEventListener('click', toggleCollapse);
-    tab.addEventListener('click', toggleCollapse);
+    if (isMobile) {
+        // Hide desktop controls that have no recovery path on mobile
+        hud.querySelector('#el-minimize-btn').style.display = 'none';
+        tab.style.display = 'none';
+    } else {
+        const toggleCollapse = () => {
+            const collapsed = hud.classList.toggle('el-collapsed');
+            tab.textContent = collapsed ? '‹' : '›';
+        };
+        hud.querySelector('#el-minimize-btn').addEventListener('click', toggleCollapse);
+        tab.addEventListener('click', toggleCollapse);
+    }
 
     bindTabs(hud);
     initEditDelegation(hud);
