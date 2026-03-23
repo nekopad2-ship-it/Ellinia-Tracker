@@ -1904,7 +1904,8 @@ jQuery(async () => {
         const panel = document.createElement('div');
         panel.id = 'el-diag-panel';
         Object.assign(panel.style, {
-            position: 'fixed', inset: '0', zIndex: '2147483646',
+            position: 'fixed', top: '0', left: '0', right: '0', bottom: '0',
+            zIndex: '2147483646',
             background: 'rgba(10,10,20,0.97)', color: '#ccc',
             fontFamily: 'monospace', fontSize: '11px',
             display: 'none', flexDirection: 'column', overflow: 'hidden',
@@ -1924,7 +1925,9 @@ jQuery(async () => {
             background: '#333', color: '#eee', border: '1px solid #555',
             borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontSize: '11px',
         });
-        closeBtn.onclick = () => { panel.style.display = 'none'; };
+        const doClose = () => { panel.style.display = 'none'; };
+        closeBtn.addEventListener('touchend', e => { e.preventDefault(); doClose(); });
+        closeBtn.addEventListener('click', doClose);
         header.appendChild(closeBtn);
 
         const body = document.createElement('div');
@@ -1936,7 +1939,7 @@ jQuery(async () => {
         document.body.appendChild(btn);
         document.body.appendChild(panel);
 
-        btn.onclick = () => {
+        const doOpen = () => {
             // Rebuild content every tap so it reflects latest state
             const orb  = document.getElementById('el-orb');
             const hud  = document.getElementById('el-hud');
@@ -1968,6 +1971,8 @@ jQuery(async () => {
             body.innerHTML = `<div style="line-height:1.8;margin-bottom:12px">${env}</div>${logs || '<div style="color:#888">No log entries yet</div>'}`;
             panel.style.display = 'flex';
         };
+        btn.addEventListener('touchend', e => { e.preventDefault(); doOpen(); });
+        btn.addEventListener('click', doOpen);
     }
 
     _buildDiagPanel();
