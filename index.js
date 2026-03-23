@@ -57,6 +57,7 @@ function makeCharacter(name = '', isPlayer = false, preset = {}, isCharPlayer = 
         aboGender:      preset.aboGender      || 'Beta',
         aboStatus:      'neutral',
         adventurerRank: preset.adventurerRank || 'F',
+        appearance:     '',
         hp:             { current: 100, max: 100 },
         mana:           { current: 50,  max: 50  },
         stats:          { STR: 10, AGI: 10, VIT: 10, INT: 10, WIS: 10, LCK: 10 },
@@ -85,6 +86,7 @@ const DEFAULT_SETTINGS = {
     contextMessages:   3,
     injectEnabled:     true,
     injectDepth:       0,
+    trackerInstruction: 'The [ELLINIA TRACKER] block reflects current character state. Let it inform dialogue, physical behaviour, ABO dynamics, and scene details naturally.',
     injectSections: {
         player:     true,
         charPlayer: true,
@@ -97,7 +99,8 @@ const DEFAULT_SETTINGS = {
     state: {
         player:     null,
         charPlayer: null,
-        npcs:       {}
+        npcs:       {},
+        quests:     { main: [], side: [] },
     }
 };
 
@@ -288,13 +291,15 @@ function loadChatState() {
         if (!settings.state.player)     settings.state.player     = makeCharacter(playerName, true, {}, false);
         if (!settings.state.charPlayer) settings.state.charPlayer = makeCharacter(charName, false, {}, true);
         if (!settings.state.npcs)       settings.state.npcs       = {};
+        if (!settings.state.quests)     settings.state.quests     = { main: [], side: [] };
         settings.state.player.isPlayer         = true;
         settings.state.charPlayer.isCharPlayer = true;
     } else {
         settings.state = {
             player:     makeCharacter(playerName, true, {}, false),
             charPlayer: makeCharacter(charName, false, {}, true),
-            npcs:       {}
+            npcs:       {},
+            quests:     { main: [], side: [] },
         };
     }
 }
@@ -456,6 +461,11 @@ function renderCharPanel(char) {
             <select class="el-rank-select el-abo-select" data-cid="${cid}" data-f="aboGender">${aboOpts}</select>
             ${char.aboStatus !== 'neutral' ? `<span class="el-abo-active el-abo-cycle" data-cid="${cid}" style="color:${aboColor};cursor:pointer" title="Click to cycle status">[${char.aboStatus.toUpperCase()}]</span>` : `<span class="el-abo-cycle el-abo-neutral" data-cid="${cid}" style="color:var(--el-text-dim);cursor:pointer" title="Click to set status">○</span>`}
             <span class="el-total-lv">∑ Lv.${totalLevel(char)}</span>
+        </div>
+        <div class="el-ident-row" style="align-items:flex-start;margin-top:4px">
+            <span class="el-ident-label" style="padding-top:2px">Look:</span>
+            <div class="el-editable el-appearance-edit" data-cid="${cid}" data-f="appearance" contenteditable="true"
+                style="flex:1;font-size:0.75rem;color:var(--el-text-dim);line-height:1.4;min-height:1.2em">${char.appearance || '<span style="opacity:0.35;font-style:italic">e.g. lean build, heat flush visible…</span>'}</div>
         </div>
     </div>`;
 
@@ -820,6 +830,7 @@ function initEditDelegation(hud) {
         if (!char) return;
         if      (f==='name')               char.name=val;
         else if (f==='class')              char.class=val;
+        else if (f==='appearance')         char.appearance=val;
         else if (f==='notes')              char.notes=val;
         else if (f.startsWith('skill.name.')){ const i=parseInt(f.split('.')[2]); if(char.skills?.[i]) char.skills[i].name=val; }
         else if (f.startsWith('skill.desc.')){ const i=parseInt(f.split('.')[2]); if(char.skills?.[i]) char.skills[i].description=val; }
@@ -861,7 +872,6 @@ function renderNPCCard(npc) {
         <div class="el-ident-row">
             <span class="el-ident-label">Class:</span>
             <span class="el-editable" data-cid="${cid}" data-f="class" contenteditable="true">${escapeHtml(npc.class) || '—'}</span>
-            ${rankBadge(npc.classRank)}
         </div>
 
         <div class="el-ident-row">
@@ -930,7 +940,7 @@ function renderNPCTab() {
             return `<div class="el-npc-card el-collapse" data-target="${cid}">
                 <div class="el-npc-header el-toggle">
                     <span class="el-npc-name">${name}</span>
-                    <span class="el-npc-meta">${npc.class || '—'} ${rankBadge(npc.classRank)}</span>
+                    <span class="el-npc-meta">${npc.class || '—'}</span>
                     <button class="el-btn tiny el-remove-npc" data-npc="${name}" title="Remove NPC">✕</button>
                     <span class="el-arrow">▼</span>
                 </div>
@@ -946,8 +956,116 @@ function renderNPCTab() {
 
 // ─── SETTINGS TAB RENDERER ───────────────────────────────────────────────────
 
+// ─── QUEST TAB ────────────────────────────────────────────────────────────────
+
+const QUEST_STATUS_CYCLE = ['active', 'complete', 'failed'];
+const QUEST_STATUS_COLORS = { active: '#e8c840', complete: '#52e05a', failed: '#e05252' };
+const QUEST_STATUS_ICONS  = { active: '◉', complete: '✓', failed: '✕' };
+
+let _questView = 'main'; // 'main' | 'side'
+
+function renderQuestTab() {
+    const quests = settings.state.quests || { main: [], side: [] };
+    const list   = quests[_questView] || [];
+
+    return `<div class="el-quest-switcher">
+        <button class="el-quest-sw-btn${_questView==='main'?' active':''}" data-qv="main">Main Quests</button>
+        <button class="el-quest-sw-btn${_questView==='side'?' active':''}" data-qv="side">Side Quests</button>
+    </div>
+    <div class="el-quest-list">
+        ${list.length === 0
+            ? `<div class="el-empty" style="margin-top:20px">No ${_questView} quests yet.</div>`
+            : list.map((q, i) => {
+                const sc  = QUEST_STATUS_COLORS[q.status] || '#888';
+                const si  = QUEST_STATUS_ICONS[q.status]  || '◉';
+                const nid = `qnotes-${_questView}-${i}`;
+                return `<div class="el-quest-card" data-qi="${i}" data-qtype="${_questView}">
+                    <div class="el-quest-top">
+                        <button class="el-quest-status" data-qi="${i}" data-qtype="${_questView}"
+                            style="color:${sc};border-color:${sc}40" title="Click to cycle status">${si}</button>
+                        <div class="el-editable el-quest-title" data-qf="title" data-qi="${i}" data-qtype="${_questView}"
+                            contenteditable="true">${escapeHtml(q.title || 'Untitled Quest')}</div>
+                        <button class="el-rm-btn el-quest-rm" data-qi="${i}" data-qtype="${_questView}" title="Remove">✕</button>
+                    </div>
+                    <div class="el-collapse" data-target="${nid}">
+                        <div class="el-sec-title el-toggle" style="font-size:10px;margin-top:4px">Notes <span class="el-arrow">▼</span></div>
+                        <div class="el-collapse-body collapsed" id="${nid}">
+                            <div class="el-editable el-quest-notes" data-qf="notes" data-qi="${i}" data-qtype="${_questView}"
+                                contenteditable="true" style="font-size:0.75rem;min-height:40px">${escapeHtml(q.notes || '')}</div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('')
+        }
+    </div>
+    <button class="el-btn small el-quest-add" data-qtype="${_questView}" style="margin:10px 0 0 0">+ Add Quest</button>`;
+}
+
+function bindQuestEvents(root) {
+    // Switch main/side
+    root.querySelectorAll('.el-quest-sw-btn[data-qv]').forEach(btn => {
+        btn.addEventListener('click', () => { _questView = btn.dataset.qv; renderHUD(); });
+    });
+
+    // Add quest
+    root.querySelectorAll('.el-quest-add[data-qtype]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const type = btn.dataset.qtype;
+            if (!settings.state.quests) settings.state.quests = { main:[], side:[] };
+            settings.state.quests[type].push({ title: 'New Quest', status: 'active', notes: '' });
+            saveState(); renderHUD();
+        });
+    });
+
+    // Cycle status
+    root.querySelectorAll('.el-quest-status[data-qi]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const i    = parseInt(btn.dataset.qi);
+            const type = btn.dataset.qtype;
+            const q    = settings.state.quests?.[type]?.[i];
+            if (!q) return;
+            const idx  = QUEST_STATUS_CYCLE.indexOf(q.status);
+            q.status   = QUEST_STATUS_CYCLE[(idx + 1) % QUEST_STATUS_CYCLE.length];
+            saveState(); renderHUD();
+        });
+    });
+
+    // Remove quest
+    root.querySelectorAll('.el-quest-rm[data-qi]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const i    = parseInt(btn.dataset.qi);
+            const type = btn.dataset.qtype;
+            settings.state.quests?.[type]?.splice(i, 1);
+            saveState(); renderHUD();
+        });
+    });
+
+    // Focusout: save title + notes
+    root.querySelector('.el-quest-list')?.addEventListener('focusout', e => {
+        const el = e.target.closest('.el-editable[data-qf]');
+        if (!el) return;
+        const i    = parseInt(el.dataset.qi);
+        const type = el.dataset.qtype;
+        const q    = settings.state.quests?.[type]?.[i];
+        if (!q) return;
+        q[el.dataset.qf] = el.innerText.trim();
+        saveState();
+    });
+}
+
 function renderSettingsTab() {
     return `
+    <div class="el-settings-group">
+        <div class="el-settings-title">TRACKER INSTRUCTION</div>
+        <div style="font-size:0.72rem;color:var(--el-text-dim);margin-bottom:6px">Prepended to every injection. Tells the AI how to use the tracker state.</div>
+        <textarea id="el-tracker-instruction" class="el-input el-textarea" rows="4"
+            style="width:100%;resize:vertical;font-size:0.75rem">${escapeHtml(settings.trackerInstruction || '')}</textarea>
+        <div class="el-btn-row" style="margin-top:6px">
+            <button class="el-btn small" id="el-save-instruction">Save</button>
+            <button class="el-btn small" id="el-restore-instruction">↺ Restore Default</button>
+        </div>
+    </div>
+
     <div class="el-settings-group" id="el-api-group">
         <div class="el-settings-title">CONNECTION</div>
         <label class="el-label">Connection Profile
@@ -976,41 +1094,6 @@ function renderSettingsTab() {
             Auto-parse after every AI message
         </label>
         <button class="el-btn" id="el-save-parse">Save</button>
-    </div>
-
-    <div class="el-settings-group">
-        <div class="el-settings-title">PLAYER CHARACTER</div>
-        <label class="el-label">Name
-            <input type="text" id="el-p-name" class="el-input" value="${settings.state.player.name || ''}"/>
-        </label>
-        <label class="el-label">Class
-            <input type="text" id="el-p-class" class="el-input" value="${settings.state.player.class || ''}"/>
-        </label>
-        <label class="el-label">Class Rank
-            <select id="el-p-classrank" class="el-input">
-                ${RANK_ORDER.filter(r => r !== 'Mythic').map(r =>
-                    `<option ${settings.state.player.classRank === r ? 'selected' : ''}>${r}</option>`
-                ).join('')}
-            </select>
-        </label>
-        <label class="el-label">ABO Subgender
-            <select id="el-p-abo" class="el-input">
-                ${['Alpha','Beta','Omega'].map(g =>
-                    `<option ${settings.state.player.aboGender === g ? 'selected' : ''}>${g}</option>`
-                ).join('')}
-            </select>
-        </label>
-        <label class="el-label">Adventurer Rank
-            <select id="el-p-advrank" class="el-input">
-                ${RANK_ORDER.filter(r => r !== 'Mythic').map(r =>
-                    `<option ${settings.state.player.adventurerRank === r ? 'selected' : ''}>${r}</option>`
-                ).join('')}
-            </select>
-        </label>
-        <label class="el-label">Thread Sight Level
-            <input type="number" id="el-p-ts" class="el-input" value="${settings.state.player.threadSightLevel || 1}" min="0" max="5"/>
-        </label>
-        <button class="el-btn" id="el-save-player">Save Player</button>
     </div>
 
     <div class="el-settings-group el-danger-group">
@@ -1059,10 +1142,12 @@ function renderHUD() {
 
     const playerTab   = hud.querySelector('#el-tab-player');
     const npcTab      = hud.querySelector('#el-tab-npcs');
+    const questTab    = hud.querySelector('#el-tab-quests');
     const settingsTab = hud.querySelector('#el-tab-settings');
 
     if (playerTab)   playerTab.innerHTML   = renderPlayerTab();
     if (npcTab)      npcTab.innerHTML      = renderNPCTab();
+    if (questTab)    questTab.innerHTML    = renderQuestTab();
     if (settingsTab) settingsTab.innerHTML = renderSettingsTab();
 
     // Restore open state from persistent Set
@@ -1077,6 +1162,7 @@ function renderHUD() {
 
     bindCollapsibles(hud);
     bindNPCEvents(hud);
+    bindQuestEvents(hud);
     bindSettingsEvents(hud);
     bindEditEvents(hud);
 }
@@ -1141,6 +1227,21 @@ function bindNPCEvents(root) {
 // ─── SETTINGS EVENTS ─────────────────────────────────────────────────────────
 
 function bindSettingsEvents(root) {
+    root.querySelector('#el-save-instruction')?.addEventListener('click', () => {
+        settings.trackerInstruction = root.querySelector('#el-tracker-instruction')?.value ?? '';
+        saveSettingsDebounced();
+        showNotif('✓ Tracker instruction saved');
+    });
+
+    root.querySelector('#el-restore-instruction')?.addEventListener('click', () => {
+        const def = DEFAULT_SETTINGS.trackerInstruction;
+        settings.trackerInstruction = def;
+        const ta = root.querySelector('#el-tracker-instruction');
+        if (ta) ta.value = def;
+        saveSettingsDebounced();
+        showNotif('✓ Restored default instruction');
+    });
+
     const profileSel = root.querySelector('#el-conn-profile');
     const presetSel  = root.querySelector('#el-comp-preset');
 
@@ -1172,19 +1273,6 @@ function bindSettingsEvents(root) {
         settings.autoUpdate      = root.querySelector('#el-auto-update')?.checked ?? true;
         saveState();
         showNotif('✓ Parse settings saved');
-    });
-
-    root.querySelector('#el-save-player')?.addEventListener('click', () => {
-        const p = settings.state.player;
-        p.name             = root.querySelector('#el-p-name')?.value     || p.name;
-        p.class            = root.querySelector('#el-p-class')?.value    || p.class;
-        p.classRank        = root.querySelector('#el-p-classrank')?.value|| p.classRank;
-        p.aboGender        = root.querySelector('#el-p-abo')?.value      || p.aboGender;
-        p.adventurerRank   = root.querySelector('#el-p-advrank')?.value  || p.adventurerRank;
-        p.threadSightLevel = parseInt(root.querySelector('#el-p-ts')?.value) || p.threadSightLevel;
-        saveState();
-        renderHUD();
-        showNotif('✓ Player saved');
     });
 
     root.querySelector('#el-reset-all')?.addEventListener('click', () => {
@@ -1623,6 +1711,8 @@ function bindTabs(hud) {
             hud.querySelectorAll('.el-tab-pane').forEach(p => p.classList.add('hidden'));
             btn.classList.add('active');
             hud.querySelector(`#el-tab-${btn.dataset.tab}`)?.classList.remove('hidden');
+            // Deactivate settings footer button when switching to a main tab
+            hud.querySelector('#el-settings-btn')?.classList.remove('active');
         });
     });
 }
@@ -1748,10 +1838,9 @@ function createHUD() {
             <div class="el-hud-title">
                 <span class="el-hud-glyph">◈</span>
                 <span>ELLINIA</span>
-                <span class="el-hud-sub">SYSTEM INTERFACE</span>
+                <span class="el-hud-sub">TRACKER</span>
             </div>
             <div class="el-hud-controls">
-                <button class="el-icon-btn" id="el-parse-btn" title="Parse last messages">⟳</button>
                 <button class="el-icon-btn" id="el-minimize-btn" title="Collapse sidebar">−</button>
                 <button class="el-icon-btn el-mobile-close" id="el-close-btn" title="Close">✕</button>
             </div>
@@ -1760,40 +1849,63 @@ function createHUD() {
             <div class="el-tabs">
                 <button class="el-tab-btn active" data-tab="player">PLAYER</button>
                 <button class="el-tab-btn" data-tab="npcs">ROSTER</button>
-                <button class="el-tab-btn" data-tab="settings">CONFIG</button>
+                <button class="el-tab-btn" data-tab="quests">QUESTS</button>
             </div>
             <div class="el-tab-pane el-scroll" id="el-tab-player"></div>
             <div class="el-tab-pane el-scroll hidden" id="el-tab-npcs"></div>
+            <div class="el-tab-pane el-scroll hidden" id="el-tab-quests"></div>
             <div class="el-tab-pane el-scroll hidden" id="el-tab-settings"></div>
+        </div>
+        <div class="el-hud-footer">
+            <button class="el-footer-btn el-footer-parse" id="el-parse-btn" title="Parse last messages">
+                ⟳ Refresh Info
+            </button>
+            <button class="el-footer-btn el-footer-settings" id="el-settings-btn" title="Settings">
+                ⚙ Settings
+            </button>
         </div>`;
 
     document.body.appendChild(hud);
 
-    // On mobile (touch device / narrow screen) hide the collapse tab and minus button —
-    // the orb handles open/close. On desktop they stay functional.
     const isMobile = ('ontouchstart' in window) || window.innerWidth < 600;
 
-    // Cancel/parse toggle
+    // ── Footer: parse button ──────────────────────────────────────────
     hud.querySelector('#el-parse-btn').addEventListener('click', () => {
         if (isParsing) {
             _abortCtrl?.abort();
             isParsing = false;
-            const btn = document.getElementById('el-parse-btn');
-            if (btn) { btn.classList.remove('spinning'); btn.textContent = '⟳'; }
+            const btn = hud.querySelector('#el-parse-btn');
+            if (btn) { btn.classList.remove('spinning'); btn.innerHTML = '⟳ Refresh Info'; }
             showNotif('Parse cancelled');
         } else {
             parseLastMessages();
         }
     });
 
-    // Create the persistent collapse tab
+    // ── Footer: settings button — toggles settings pane ──────────────
+    hud.querySelector('#el-settings-btn').addEventListener('click', () => {
+        const isOpen = hud.querySelector('#el-tab-settings').classList.contains('hidden') === false;
+        if (isOpen) {
+            // Close settings — go back to last non-settings active tab
+            const lastActive = hud.querySelector('.el-tab-btn.active')?.dataset.tab || 'player';
+            hud.querySelectorAll('.el-tab-pane').forEach(p => p.classList.add('hidden'));
+            hud.querySelector(`#el-tab-${lastActive !== 'settings' ? lastActive : 'player'}`)?.classList.remove('hidden');
+            hud.querySelector('#el-settings-btn').classList.remove('active');
+        } else {
+            hud.querySelectorAll('.el-tab-pane').forEach(p => p.classList.add('hidden'));
+            hud.querySelector('#el-tab-settings')?.classList.remove('hidden');
+            hud.querySelector('#el-settings-btn').classList.add('active');
+        }
+        renderHUD();
+    });
+
+    // ── Desktop collapse tab ──────────────────────────────────────────
     const tab = document.createElement('div');
     tab.id = 'el-hud-tab';
     tab.textContent = '›';
     document.body.appendChild(tab);
 
     if (isMobile) {
-        // Hide desktop controls that have no recovery path on mobile
         hud.querySelector('#el-minimize-btn').style.display = 'none';
         tab.style.display = 'none';
     } else {
@@ -1827,6 +1939,9 @@ function formatChar(char, sections) {
     idParts.push(`HP:${char.hp?.current??'?'}/${char.hp?.max??'?'}`);
     idParts.push(`MP:${char.mana?.current??'?'}/${char.mana?.max??'?'}`);
     lines.push(idParts.join(' | '));
+
+    // Appearance
+    if (char.appearance) lines.push(`Appearance: ${char.appearance}`);
 
     // Stats
     if (char.stats) {
@@ -1909,7 +2024,24 @@ function formatStateForContext() {
     }
 
     if (!blocks.length) return '';
-    return `[ELLINIA TRACKER]\n${blocks.join('\n\n')}`;
+
+    // Prepend tracker instruction if set
+    const prefix = settings.trackerInstruction?.trim()
+        ? settings.trackerInstruction.trim() + '\n\n'
+        : '';
+
+    // Append active quests
+    const quests = settings.state.quests;
+    const questLines = [];
+    if (quests) {
+        const activeMain = (quests.main || []).filter(q => q.status === 'active');
+        const activeSide = (quests.side || []).filter(q => q.status === 'active');
+        if (activeMain.length) questLines.push('Main: ' + activeMain.map(q => q.title).join(', '));
+        if (activeSide.length) questLines.push('Side: ' + activeSide.map(q => q.title).join(', '));
+    }
+    const questBlock = questLines.length ? `\n\n[QUESTS]\n${questLines.join('\n')}` : '';
+
+    return `${prefix}[ELLINIA TRACKER]\n${blocks.join('\n\n')}${questBlock}`;
 }
 
 function injectState() {
